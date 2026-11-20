@@ -1,14 +1,3 @@
-"""The Asia map and the journey animation (Qt Graphics View).
-
-Everything here is presentation: Prolog has already chosen the trip. The map
-is drawn from our own country outlines (no internet needed). It replays the
-order in which Prolog explored the flights, then flies a plane along the
-chosen route while the camera follows, zooming into the country for the
-train/bus part and back out for the flight home.
-
-Scene coordinates are the map units from backend/geo.py.
-"""
-
 from __future__ import annotations
 
 import math
@@ -23,12 +12,11 @@ from theme import C, MONO, SANS, color, font
 
 Pt = tuple[float, float]
 
+TINY = 2.0
+TINY_WIDTH = 6.0
 
-# ---------------------------------------------------------------- geometry
 
 def arc(a: dict, b: dict, k: float = 0.16, samples: int = 36) -> list[Pt]:
-    """Flights bow out as arcs. The bend is fixed by city order, so A→B and
-    B→A sit on the same curve as the background network."""
     p, q = (a, b) if a["id"] < b["id"] else (b, a)
     cx = (p["x"] + q["x"]) / 2 - (q["y"] - p["y"]) * k
     cy = (p["y"] + q["y"]) / 2 + (q["x"] - p["x"]) * k
@@ -66,14 +54,13 @@ def path_of(pts: list[Pt]) -> QPainterPath:
 
 def pen(name: str, width: float, alpha: float = 1.0, style=Qt.PenStyle.SolidLine) -> QPen:
     p = QPen(color(name, alpha), width)
-    p.setCosmetic(True)  # width in screen pixels, whatever the zoom
+    p.setCosmetic(True)
     p.setStyle(style)
     p.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     return p
 
 
-# Each transport type: (theme colour, line style). Overnight rides are dashed.
 MODE_STYLE = {
     "high_speed": ("train", Qt.PenStyle.SolidLine), "train": ("train", Qt.PenStyle.SolidLine),
     "night_train": ("train", Qt.PenStyle.DashLine), "bus": ("bus", Qt.PenStyle.SolidLine),
@@ -89,7 +76,6 @@ def ease(t: float) -> float:
 
 
 def box_around(points: list[Pt], pad: float, min_size: float) -> QRectF:
-    """A camera box around the points, with extra room on the right for city names."""
     xs, ys = [p[0] for p in points], [p[1] for p in points]
     r = QRectF(min(xs) - pad, min(ys) - pad, max(xs) - min(xs) + 2.6 * pad, max(ys) - min(ys) + 2 * pad)
     if r.width() < min_size or r.height() < min_size:
@@ -104,10 +90,9 @@ def lerp_rect(a: QRectF, b: QRectF, t: float) -> QRectF:
                   a.width() + (b.width() - a.width()) * t, a.height() + (b.height() - a.height()) * t)
 
 
-# ---------------------------------------------------------------- items
+#items
 
 class TextItem(QGraphicsItem):
-    """Text that stays the same size on screen, with a soft halo."""
 
     def __init__(self, text: str, qfont: QFont, ink: str, halo: str | None = None, center: bool = True):
         super().__init__()
@@ -118,7 +103,7 @@ class TextItem(QGraphicsItem):
         self.rect = QRectF(-w / 2 if center else 0, -h / 2, w, h).adjusted(-3, -3, 3, 3)
         self.base = QPointF(-w / 2 if center else 0, fm.ascent() - h / 2)
 
-    def boundingRect(self):  # noqa: N802
+    def boundingRect(self):
         return self.rect
 
     def paint(self, p: QPainter, *_):
@@ -131,7 +116,6 @@ class TextItem(QGraphicsItem):
 
 
 class CityItem(QGraphicsItem):
-    """A city dot with an optional label; same pixel size at every zoom."""
 
     def __init__(self, city: dict, on_click: Callable[[dict], None]):
         super().__init__()
@@ -141,7 +125,7 @@ class CityItem(QGraphicsItem):
         self.setToolTip(f'{city["name"]} · {city["code"]}')
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.city, self.on_click = city, on_click
-        self.state = "normal"   # normal | on | home
+        self.state = "normal"
         self.show_label = False
         self.code_font = font(11.5, QFont.Weight.DemiBold, MONO)
         self.name_font = font(12, QFont.Weight.Bold, SANS)
@@ -154,7 +138,7 @@ class CityItem(QGraphicsItem):
         self.prepareGeometryChange()
         self.update()
 
-    def boundingRect(self):  # noqa: N802
+    def boundingRect(self):
         return QRectF(-7, -9, 150 if self.show_label else 14, 18)
 
     def paint(self, p: QPainter, *_):
@@ -172,7 +156,7 @@ class CityItem(QGraphicsItem):
             p.strokePath(path, QPen(color("land"), 3.5))
             p.fillPath(path, color("ink"))
 
-    def mousePressEvent(self, event):  # noqa: N802
+    def mousePressEvent(self, event):
         self.on_click(self.city)
 
 
@@ -197,21 +181,20 @@ class CountryItem(QGraphicsPathItem):
         self.setPen(pen("ink3" if self.focused else "land_edge", 1.0 if self.focused else 0.6))
         self.setZValue(2 if self.focused else 1)
 
-    def hoverEnterEvent(self, e):  # noqa: N802
+    def hoverEnterEvent(self, e):
         self.hover = True
         self.restyle()
 
-    def hoverLeaveEvent(self, e):  # noqa: N802
+    def hoverLeaveEvent(self, e):
         self.hover = False
         self.restyle()
 
-    def mousePressEvent(self, e):  # noqa: N802
+    def mousePressEvent(self, e):
         if self.trip and self.trip != "thailand":
             self.on_click(self.trip)
 
 
 class RiderItem(QGraphicsItem):
-    """The plane (or, on the ground, a dot) that travels the route."""
 
     def __init__(self):
         super().__init__()
@@ -219,7 +202,7 @@ class RiderItem(QGraphicsItem):
         self.setZValue(9)
         self.flying, self.angle = True, 0.0
 
-    def boundingRect(self):  # noqa: N802
+    def boundingRect(self):
         return QRectF(-14, -14, 28, 28)
 
     def paint(self, p: QPainter, *_):
@@ -233,7 +216,7 @@ class RiderItem(QGraphicsItem):
             p.drawEllipse(QPointF(0, 0), 5, 5)
 
 
-# ---------------------------------------------------------------- the view
+#the view
 
 class MapView(QGraphicsView):
     country_picked = Signal(str)
@@ -262,8 +245,8 @@ class MapView(QGraphicsView):
         self.route_country: str | None = None
         self.trace_items: list = []
         self.journey_items: list = []
-        self.detail: dict | None = None   # cards shown on the country close-up
-        self.show_cards = False           # only when the map is expanded
+        self.detail: dict | None = None
+        self.show_cards = False
         self.timer = QTimer(self)
         self.timer.setInterval(16)
         self.timer.timeout.connect(self._tick)
@@ -271,7 +254,7 @@ class MapView(QGraphicsView):
         self.anim: dict | None = None
         self._build()
 
-    # ------------------------------------------------------------ drawing the map
+    #drawing the map
 
     def _build(self) -> None:
         s = self.scene_
@@ -288,12 +271,21 @@ class MapView(QGraphicsView):
             for ring in c["rings"]:
                 path.addPolygon(QPolygonF([QPointF(x, y) for x, y in ring]))
                 path.closeSubpath()
+            box = path.boundingRect()
+            tiny = c["trip"] and max(box.width(), box.height()) < TINY
+            if tiny:
+                k = TINY_WIDTH / max(box.width(), box.height())
+                mid = box.center()
+                path = QPainterPath()
+                for ring in c["rings"]:
+                    path.addPolygon(QPolygonF([QPointF(mid.x() + (x - mid.x()) * k, mid.y() + (y - mid.y()) * k)
+                                               for x, y in ring]))
+                    path.closeSubpath()
             kind = "neighbour" if c["trip"] is None else ("home" if c["trip"] == "thailand" else "trip")
             item = CountryItem(path, kind, c["trip"], self.country_picked.emit)
             s.addItem(item)
             self.countries.append(item)
 
-        # the whole network, faint: every flight route once, plus travel inside countries
         self.network: list = []
         seen = set()
         for f in self.data["flights"]:
@@ -344,14 +336,13 @@ class MapView(QGraphicsView):
         if city["country"] != "thailand":
             self.country_picked.emit(city["country"])
 
-    # ------------------------------------------------------------ camera
+    #camera
 
     def _apply(self, rect: QRectF) -> None:
         vw, vh = max(1, self.viewport().width()), max(1, self.viewport().height())
         s = min(vw / rect.width(), vh / rect.height())
         self.setTransform(QTransform.fromScale(s, s))
         self.centerOn(rect.center())
-        # zoomed in far enough: name every city of the country we are looking at
         zoomed = s > 14
         for cid, item in self.city_items.items():
             want = item.state != "normal" or (zoomed and item.city["country"] in (self.focus, self.route_country))
@@ -364,11 +355,11 @@ class MapView(QGraphicsView):
         self.cam = QRectF(rect)
         self._apply(self.cam)
 
-    def resizeEvent(self, e):  # noqa: N802
+    def resizeEvent(self, e):
         super().resizeEvent(e)
         self._apply(self.cam)
 
-    def wheelEvent(self, e):  # noqa: N802
+    def wheelEvent(self, e):
         if self.anim:
             return
         factor = 1.0015 ** e.angleDelta().y()
@@ -376,7 +367,7 @@ class MapView(QGraphicsView):
         self.cam = self.mapToScene(self.viewport().rect()).boundingRect()
         self._apply(self.cam)
 
-    def mouseReleaseEvent(self, e):  # noqa: N802
+    def mouseReleaseEvent(self, e):
         super().mouseReleaseEvent(e)
         if not self.anim:
             self.cam = self.mapToScene(self.viewport().rect()).boundingRect()
@@ -384,7 +375,7 @@ class MapView(QGraphicsView):
     def show_asia(self) -> None:
         self.set_camera(self.asia)
 
-    # ------------------------------------------------------------ destination highlight
+    #destination highlight
 
     def set_focus(self, country: str) -> None:
         self.focus = country
@@ -393,7 +384,7 @@ class MapView(QGraphicsView):
             item.restyle()
         self._apply(self.cam)
 
-    # ------------------------------------------------------------ search replay
+    #search replay
 
     def clear(self) -> None:
         self.timer.stop()
@@ -411,14 +402,12 @@ class MapView(QGraphicsView):
         self._apply(self.cam)
 
     def replay(self, edges: list, on_progress: Callable[[int], None], on_done: Callable[[], None]) -> None:
-        """Draw each flight Prolog looked at, in the order it looked."""
         self.anim = {"kind": "replay", "edges": edges, "shown": 0, "progress": on_progress, "done": on_done,
                      "every": min(35, max(6, 1100 / max(1, len(edges)))), "start_cam": QRectF(self.cam)}
         self.clock.start()
         self.timer.start()
 
     def _tick_replay(self, a: dict) -> None:
-        # the camera eases back to the whole of Asia while the search runs
         t = min(1.0, self.clock.elapsed() / 700)
         self.set_camera(lerp_rect(a["start_cam"], self.asia, ease(t)))
         want = min(len(a["edges"]), int(self.clock.elapsed() / a["every"]) + 1)
@@ -447,7 +436,7 @@ class MapView(QGraphicsView):
         item.setZValue(4)
         self.trace_items = [item]
 
-    # ------------------------------------------------------------ the journey
+    #the journey
 
     def _segments(self, opt: dict) -> list[dict]:
         cs = self.cities
@@ -481,7 +470,6 @@ class MapView(QGraphicsView):
         return {"route": box_around(route, 7, 24), "country": box_around(country, 3, 9)}
 
     def travel(self, opt: dict, home: str, on_stage: Callable[[str], None], on_done: Callable[[], None]) -> None:
-        """Fly out, zoom into the country, ride between cities, zoom out, fly home."""
         self.timer.stop()
         for item in self.journey_items:
             self.scene_.removeItem(item)
@@ -495,7 +483,7 @@ class MapView(QGraphicsView):
             n.setOpacity(0.35)
         segs, boxes = self._segments(opt), self._boxes(opt)
         cam = QRectF(self.cam)
-        for s in segs:  # remember where the camera is when each segment starts
+        for s in segs:
             s["cam_from"] = cam
             if s["kind"] == "cam":
                 cam = boxes[s["to"]]
@@ -543,7 +531,6 @@ class MapView(QGraphicsView):
         self.rider.update()
 
     def _complete(self, a: dict, i: int) -> None:
-        """A segment has finished: draw it fully and light up the city we reached."""
         seg = a["segs"][i]
         if seg["kind"] == "cam":
             self.set_camera(a["boxes"][seg["to"]])
@@ -551,7 +538,7 @@ class MapView(QGraphicsView):
             return
         if a["current"] == i and a["item"] is not None:
             item = a["item"]
-        else:  # the segment finished between two frames before it was ever drawn
+        else:
             item = self.scene_.addPath(QPainterPath(), seg["pen"])
             item.setZValue(5)
             self.journey_items.append(item)
@@ -562,7 +549,6 @@ class MapView(QGraphicsView):
         a["completed"] = i + 1
 
     def skip(self) -> None:
-        """Jump to the end of the journey: draw the whole route at once."""
         a = self.anim
         if not a or a["kind"] != "travel":
             return
@@ -578,7 +564,6 @@ class MapView(QGraphicsView):
         for c in a["opt"]["cities"]:
             self.city_items[c].set(state="on")
         self.rider.setVisible(False)
-        # End on a close-up of the country, with a card for every stop.
         self.detail = self._detail(a["opt"])
         self.detail_opt = a["opt"]
         self.anim = {"kind": "glide", "from": QRectF(self.cam), "to": self._closeup(a["opt"]), "ms": 900}
@@ -601,24 +586,21 @@ class MapView(QGraphicsView):
         else:
             self._tick_travel(a)
 
-    # ------------------------------------------------------------ country close-up
+    #country close-up
 
     def refit(self) -> None:
-        """Re-frame the country close-up (after the map is expanded or shrunk)."""
         if self.detail and not self.anim:
             self.set_camera(self._closeup(self.detail_opt))
         self.viewport().update()
 
     def _closeup(self, opt: dict) -> QRectF:
-        """The tour's cities, with room on the right for the day cards."""
         pts = [(self.cities[c]["x"], self.cities[c]["y"]) for c in opt["cities"]]
         r = box_around(pts, 2.5, 7)
-        if not self.show_cards:  # small map: a little margin all round for the ride labels
+        if not self.show_cards:
             return QRectF(r.x() - r.width() * 0.3, r.y() - r.height() * 0.15, r.width() * 1.6, r.height() * 1.3)
         return QRectF(r.x() - r.width() * 0.15, r.y() - r.height() * 0.1, r.width() * 2.1, r.height() * 1.2)
 
     def _detail(self, opt: dict) -> dict:
-        """What the close-up shows: one card per stay, and a label on each ride."""
         stays = booking.stays(opt)
         for st in stays:
             st["price"] = opt.get("roomPrice", {}).get(st["city"])
@@ -632,11 +614,10 @@ class MapView(QGraphicsView):
                           "mode": MODE_STYLE[mv["mode"]][0]})
         return {"stays": stays, "rides": rides}
 
-    def drawForeground(self, p: QPainter, rect) -> None:  # noqa: N802
-        """Day cards beside the cities, joined to them by thin lines (drawn in screen pixels)."""
+    def drawForeground(self, p: QPainter, rect) -> None:
         if not self.detail or self.anim:
             return
-        if not self.show_cards:  # small map: lines only; labels and cards when expanded
+        if not self.show_cards:
             return
         self._ride_labels(p)
         p.save()
@@ -658,7 +639,6 @@ class MapView(QGraphicsView):
             w = QFontMetricsF(f).horizontalAdvance(ride["text"]) + 14
             cx, cy = mid.x(), mid.y()
             if math.hypot(b.x() - a.x(), b.y() - a.y()) < 140:
-                # cities close together: put the label beside the line, away from the names
                 cx -= w / 2 + 18
                 cy += 22
                 p.setPen(QPen(color(ride["mode"]), 1, Qt.PenStyle.DotLine))
@@ -694,7 +674,6 @@ class MapView(QGraphicsView):
             y = max(y_next, pt.y() - h / 2)
             card = QRectF(x, y, card_w, h)
             y_next = y + h + 10
-            # the leader line from the card to the city
             p.setPen(QPen(color("ink3"), 1, Qt.PenStyle.DashLine))
             p.drawLine(QPointF(x, y + 26), pt)
             p.setPen(QPen(color("rule"), 1))
@@ -717,9 +696,8 @@ class MapView(QGraphicsView):
             if st["on_board"]:
                 foot += f' + {MODE_NAME[st["on_board"]].lower()}'
             elif st.get("price") and nights:
-                foot += f' · about ฿{st["price"]:,}/night'
+                foot += f' · about ฿ {st["price"]:,}/night'
             p.setFont(foot_f)
             p.setPen(color("ink3"))
             p.drawText(QPointF(x + 12, y + h - 10),
                        QFontMetricsF(foot_f).elidedText(foot, Qt.TextElideMode.ElideRight, card_w - 24))
-

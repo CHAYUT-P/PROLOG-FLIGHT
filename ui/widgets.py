@@ -1,12 +1,6 @@
-"""Small reusable Qt widgets: labels, segmented buttons, chips, steppers,
-the destination card, and a layout that wraps like text."""
-
 from __future__ import annotations
-
 from typing import Callable
-
 import datetime as dt
-
 from PySide6.QtCore import QDate, QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QTextCharFormat
 from PySide6.QtWidgets import (
@@ -52,40 +46,38 @@ def clear_layout(layout: QLayout) -> None:
 
 
 class FlowLayout(QLayout):
-    """Lays widgets out left to right and wraps to the next line (Qt's classic example)."""
-
     def __init__(self, spacing: int = 6):
         super().__init__()
         self._items = []
         self._spacing = spacing
         self.setContentsMargins(0, 0, 0, 0)
 
-    def addItem(self, item):  # noqa: N802 (Qt naming)
+    def addItem(self, item):
         self._items.append(item)
 
     def count(self):
         return len(self._items)
 
-    def itemAt(self, i):  # noqa: N802
+    def itemAt(self, i):
         return self._items[i] if 0 <= i < len(self._items) else None
 
-    def takeAt(self, i):  # noqa: N802
+    def takeAt(self, i):
         return self._items.pop(i) if 0 <= i < len(self._items) else None
 
-    def hasHeightForWidth(self):  # noqa: N802
+    def hasHeightForWidth(self):
         return True
 
-    def heightForWidth(self, width):  # noqa: N802
+    def heightForWidth(self, width):
         return self._place(QRect(0, 0, width, 0), move=False)
 
-    def setGeometry(self, rect):  # noqa: N802
+    def setGeometry(self, rect):
         super().setGeometry(rect)
         self._place(rect, move=True)
 
-    def sizeHint(self):  # noqa: N802
+    def sizeHint(self):
         return self.minimumSize()
 
-    def minimumSize(self):  # noqa: N802
+    def minimumSize(self):
         size = QSize()
         for item in self._items:
             size = size.expandedTo(item.minimumSize())
@@ -105,10 +97,7 @@ class FlowLayout(QLayout):
 
 
 class Segmented(QFrame):
-    """A row (or grid) of buttons where exactly one is chosen."""
-
     changed = Signal(str)
-
     def __init__(self, options: list[tuple[str, str]], value: str, columns: int | None = None):
         super().__init__()
         self.setObjectName("segmented")
@@ -140,10 +129,7 @@ class Chip(QPushButton):
 
 
 class Stepper(QFrame):
-    """−  value  +"""
-
     changed = Signal(int)
-
     def __init__(self, value: int, lo: int, hi: int, what: str):
         super().__init__()
         self.setObjectName("stepper")
@@ -174,15 +160,12 @@ class Stepper(QFrame):
 
 
 class StationCard(QFrame):
-    """The big "Fly to" card. Clicking it opens a menu of countries."""
-
     picked = Signal(str)
-
     def __init__(self, options: list[tuple[str, str, str]]):
         super().__init__()
         self.setObjectName("station")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.options = options  # (id, name, thai)
+        self.options = options
         lay = vbox(2, (14, 12, 14, 12))
         top = hbox()
         top.addWidget(eyebrow("Fly to"))
@@ -199,7 +182,7 @@ class StationCard(QFrame):
         self.name.setText(name)
         self.thai.setText(thai)
 
-    def mousePressEvent(self, event):  # noqa: N802
+    def mousePressEvent(self, event):
         menu = QMenu(self)
         for i, (key, name, _) in enumerate(self.options):
             act = menu.addAction(name)
@@ -214,10 +197,7 @@ def qdate(d: dt.date) -> QDate:
 
 
 class DatePicker(QPushButton):
-    """Shows the chosen date; clicking it opens a calendar to pick another day (no typing)."""
-
-    changed = Signal(object)  # a datetime.date
-
+    changed = Signal(object)
     def __init__(self, value: dt.date, first: dt.date, last: dt.date):
         super().__init__()
         self.setObjectName("datePick")
@@ -261,16 +241,13 @@ class DatePicker(QPushButton):
 
 
 class Clickable(QFrame):
-    """A frame that behaves like a button (used for the plan tabs)."""
-
     clicked = Signal()
-
     def __init__(self, name: str):
         super().__init__()
         self.setObjectName(name)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
-    def mousePressEvent(self, event):  # noqa: N802
+    def mousePressEvent(self, event):
         self.clicked.emit()
 
 

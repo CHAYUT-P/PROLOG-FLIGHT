@@ -1,10 +1,3 @@
-"""Colours, fonts and the Qt stylesheet.
-
-Celadon paper, ink and route colours. Marigold is reserved for Prolog's
-search; route colours only mean "how you travel". Light or dark follows the
-operating system.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -32,7 +25,7 @@ DARK = dict(
 C: dict[str, str] = dict(LIGHT)
 
 SANS = "Overpass"
-MONO = "Overpass Mono Light"   # the family name inside the Overpass Mono files
+MONO = "Overpass Mono Light"
 THAI = "IBM Plex Sans Thai"
 
 
@@ -50,7 +43,6 @@ def font(size: float, weight: QFont.Weight = QFont.Weight.Normal, family: str = 
 
 
 def setup(app) -> None:
-    """Load the bundled fonts and pick light or dark colours."""
     for f in sorted(FONT_DIR.glob("*.ttf")):
         QFontDatabase.addApplicationFont(str(f.resolve()))
     dark = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
@@ -145,6 +137,11 @@ def stylesheet() -> str:
     #skip {{ background: transparent; color: {c['paper']}; border: 1px solid {c['ink2']}; border-radius: 10px;
              padding: 2px 10px; font-size: 11.5px; }}
     #skip:hover {{ border-color: {c['paper']}; }}
+
+    #back {{ background: {c['panel']}; border: 1px solid {c['rule']}; border-radius: 6px; padding: 8px 14px;
+             font-weight: 700; font-size: 13px; }}
+    #back:hover {{ border-color: {c['ink3']}; }}
+    #back:disabled {{ color: {c['ink3']}; }}
 
     #mapColumn {{ border-left: 1px solid {c['rule']}; }}
     #expand {{ background: {c['panel']}; border: 1px solid {c['rule']}; border-radius: 6px; padding: 8px 12px;
