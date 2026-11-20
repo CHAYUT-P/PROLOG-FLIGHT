@@ -1,27 +1,15 @@
-"""Build shared/asia_map.json from Natural Earth borders.
-
-Usage:
-  curl -o countries-10m.json https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json
-  .venv/bin/python tools/build_map.py countries-10m.json
-
-Decodes the TopoJSON, keeps the countries inside the map window, projects
-them with backend/geo.py and simplifies the outlines so the site loads fast.
-"""
-
 import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
-from geo import HEIGHT, LAT_MAX, LAT_MIN, LON_MAX, LON_MIN, WIDTH, project  # noqa: E402
+from geo import HEIGHT, LAT_MAX, LAT_MIN, LON_MAX, LON_MIN, WIDTH, project
 
-# Natural Earth name -> country id used in prolog/trip.pl
 TRIP_COUNTRIES = {
     "Thailand": "thailand", "Japan": "japan", "South Korea": "korea", "China": "china", "Singapore": "singapore",
 }
 
-# Seas, placed by hand in lat/lon.
 SEAS = [
     ("SOUTH CHINA SEA", 13.5, 114.0),
     ("PHILIPPINE SEA", 20.0, 131.0),
@@ -44,7 +32,7 @@ def decode(topo):
         for dx, dy in arc:
             x += dx
             y += dy
-            pts.append((x * sx + tx, y * sy + ty))  # (lon, lat)
+            pts.append((x * sx + tx, y * sy + ty))
         arcs.append(pts)
 
     def ring(indexes):
@@ -57,12 +45,11 @@ def decode(topo):
     countries = {}
     for g in topo["objects"]["countries"]["geometries"]:
         polys = g["arcs"] if g["type"] == "MultiPolygon" else [g["arcs"]] if g["type"] == "Polygon" else []
-        countries[g["properties"]["name"]] = [ring(p[0]) for p in polys]  # outer rings only
+        countries[g["properties"]["name"]] = [ring(p[0]) for p in polys]
     return countries
 
 
 def simplify(pts, tol):
-    """Douglas–Peucker, iterative so long coastlines don't hit the recursion limit."""
     if len(pts) < 3:
         return pts
     keep = [False] * len(pts)
@@ -114,7 +101,6 @@ def main(src):
     shapes_out = []
     for name, rings in countries.items():
         trip = TRIP_COUNTRIES.get(name)
-        # trip countries keep more detail and small islands (Bali, Jeju, Macau)
         rs = shapes(rings, tol=0.012, min_size=0.03) if trip else shapes(rings, tol=0.08, min_size=0.5)
         if rs:
             shapes_out.append({"name": name, "trip": trip, "rings": rs})

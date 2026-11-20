@@ -1,0 +1,747 @@
+<title>Tang Agent Model</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a desktop modelling tool — title bar, ribbon, project browser | diagram canvas / generated report | properties, status bar */
+:root{
+  --desk:#C9D2DE; --chrome:#E8EDF3; --chrome-2:#DCE3EC; --panel:#F6F8FB; --border:#B4BFCD; --border-soft:#D3DAE4;
+  --ink:#1B2430; --ink-2:#4B5668; --ink-3:#7A8597; --accent:#2B66AE; --accent-soft:#D6E4F5; --on-accent:#FFFFFF;
+  --canvas:#FFFFFF; --grid:#E4E9F0; --paper:#FFFFFF;
+  --el:#FFFBDA; --el-line:#9A3B25; --el2:#E7F0FA; --el2-line:#3D6C9E; --el3:#EAF5E6; --el3-line:#4C7A3C;
+  --line:#3A4049; --note:#FFF5B0; --note-line:#A38A2C; --lane:#EEF2F8; --frame:#5E6876; --sel:#1E73D8;
+  --ui:"Noto Sans","Segoe UI",Tahoma,system-ui,sans-serif; --mono:"Noto Sans Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --desk:#121418; --chrome:#22262D; --chrome-2:#2A2F37; --panel:#1B1F25; --border:#3B424D; --border-soft:#2F353E;
+  --ink:#E4E8EE; --ink-2:#A9B2BF; --ink-3:#7D8796; --accent:#5E9DE8; --accent-soft:#233A57; --on-accent:#0D1420;
+  --canvas:#181B20; --grid:#22272E; --paper:#1D2127;
+  --el:#2E2A1C; --el-line:#E0906F; --el2:#1C2A3A; --el2-line:#7FAEE0; --el3:#1E2B1D; --el3-line:#8DC27A;
+  --line:#B9C1CC; --note:#3A3420; --note-line:#B49C52; --lane:#20252C; --frame:#8C96A4; --sel:#5EA8FF; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --desk:#121418; --chrome:#22262D; --chrome-2:#2A2F37; --panel:#1B1F25; --border:#3B424D; --border-soft:#2F353E;
+  --ink:#E4E8EE; --ink-2:#A9B2BF; --ink-3:#7D8796; --accent:#5E9DE8; --accent-soft:#233A57; --on-accent:#0D1420;
+  --canvas:#181B20; --grid:#22272E; --paper:#1D2127;
+  --el:#2E2A1C; --el-line:#E0906F; --el2:#1C2A3A; --el2-line:#7FAEE0; --el3:#1E2B1D; --el3-line:#8DC27A;
+  --line:#B9C1CC; --note:#3A3420; --note-line:#B49C52; --lane:#20252C; --frame:#8C96A4; --sel:#5EA8FF; color-scheme:dark}
+
+html,body{height:100%}
+body{background:var(--desk);color:var(--ink);font:13px/1.45 var(--ui);padding-block:12px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));box-sizing:border-box}
+*,*::before,*::after{box-sizing:inherit}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
+
+.win{height:100%;display:grid;grid-template-rows:auto auto 1fr auto;background:var(--chrome);border:1px solid var(--border);
+  border-radius:6px;overflow:hidden;box-shadow:0 8px 30px rgb(0 0 0 / .18);min-height:0}
+.titlebar{display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--chrome-2);border-bottom:1px solid var(--border);font-size:12px;color:var(--ink-2)}
+.titlebar .logo{width:16px;height:16px;flex:none}
+.titlebar .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.titlebar .t b{color:var(--ink);font-weight:600}
+.dots{display:flex;gap:6px}.dots i{width:11px;height:11px;border-radius:50%;background:var(--border);display:block}
+
+.ribbon{background:var(--chrome);border-bottom:1px solid var(--border)}
+.rtabs{display:flex;gap:2px;padding:4px 8px 0;font-size:12px;overflow-x:auto}
+.rtabs span{padding:4px 12px;color:var(--ink-2);border:1px solid transparent;border-bottom:none;border-radius:4px 4px 0 0;white-space:nowrap}
+.rtabs span.on{background:var(--panel);color:var(--ink);border-color:var(--border);font-weight:600;margin-bottom:-1px}
+.rbody{display:flex;gap:0;background:var(--panel);border-top:1px solid var(--border);padding:6px 4px 2px;overflow-x:auto}
+.rgroup{display:flex;flex-direction:column;align-items:center;padding:0 10px;border-right:1px solid var(--border-soft)}
+.rgroup .btns{display:flex;gap:2px}
+.rgroup .cap{font-size:10.5px;color:var(--ink-3);padding-top:2px;white-space:nowrap}
+.rb{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:1px solid transparent;border-radius:3px;padding:3px 7px;cursor:pointer;font-size:11px;min-width:46px;white-space:nowrap}
+.rb:hover{background:var(--accent-soft);border-color:var(--border)}
+.rb[disabled]{opacity:.4;cursor:default;background:none;border-color:transparent}
+.rb svg{width:20px;height:20px}
+
+.main{display:grid;grid-template-columns:250px minmax(0,1fr) 280px;min-height:0}
+.pane{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--panel)}
+.pane+.pane{border-left:1px solid var(--border)}
+.phead{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;font-size:11.5px;font-weight:600;color:var(--ink-2);
+  background:var(--chrome-2);border-bottom:1px solid var(--border);letter-spacing:.02em}
+.pscroll{overflow:auto;min-height:0;flex:1}
+
+/* project browser */
+.tree{list-style:none;margin:0;padding:4px 0;font-size:12.5px}
+.tree ul{list-style:none;margin:0;padding-left:14px}
+.tree .row{display:flex;align-items:center;gap:5px;padding:2px 8px;cursor:pointer;white-space:nowrap;border:1px solid transparent;width:100%;background:none;text-align:left}
+.tree .row:hover{background:var(--accent-soft)}
+.tree .row.on{background:var(--accent);color:var(--on-accent)}
+.tree .row svg{flex:none;width:16px;height:16px}
+.tree .tw{width:10px;flex:none;color:var(--ink-3);font-size:9px}
+.tree .row.on .tw{color:inherit}
+.tree .lbl{overflow:hidden;text-overflow:ellipsis}
+.tree .kind{color:var(--ink-3);font-size:10.5px;margin-left:auto;padding-left:8px}
+.tree .row.on .kind{color:inherit;opacity:.8}
+
+/* document tabs */
+.center{background:var(--canvas)}
+.dtabs{display:flex;gap:0;background:var(--chrome-2);border-bottom:1px solid var(--border);overflow-x:auto;flex:none}
+.dtab{display:flex;align-items:center;gap:6px;padding:5px 6px 5px 10px;font-size:12px;border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;color:var(--ink-2);background:none;border-top:2px solid transparent;border-left:none;border-bottom:none}
+.dtab.on{background:var(--canvas);color:var(--ink);border-top-color:var(--accent);font-weight:600}
+.dtab .x{border:none;background:none;cursor:pointer;color:var(--ink-3);padding:0 4px;border-radius:3px;font-size:13px;line-height:1}
+.dtab .x:hover{background:var(--accent-soft);color:var(--ink)}
+.view{flex:1;min-height:0;overflow:auto;position:relative}
+.canvas{background-color:var(--canvas);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:12px 12px;padding:16px;min-height:100%}
+.canvas svg{display:block}
+
+/* diagram graphics */
+.dg text{font-family:var(--ui);fill:var(--ink);font-size:11px}
+.dg .b{font-weight:700}.dg .s{font-size:10px;fill:var(--ink-2)}.dg .m{font-family:var(--mono);font-size:10px}
+.dg .frame{fill:none;stroke:var(--frame);stroke-width:1}
+.dg .ftab{fill:var(--canvas);stroke:var(--frame)}
+.dg .shape{fill:var(--el);stroke:var(--el-line);stroke-width:1.2}
+.dg .shape2{fill:var(--el2);stroke:var(--el2-line);stroke-width:1.2}
+.dg .shape3{fill:var(--el3);stroke:var(--el3-line);stroke-width:1.2}
+.dg .ink{fill:var(--line);stroke:var(--line)}
+.dg .hollow{fill:var(--canvas);stroke:var(--line);stroke-width:1.2}
+.dg .note{fill:var(--note);stroke:var(--note-line)}
+.dg .region{fill:none;stroke:var(--frame);stroke-width:1.2}
+.dg .lane{fill:none;stroke:var(--frame)}
+.dg .lanehd{fill:var(--lane);stroke:var(--frame)}
+.dg .pkgtab,.dg .pkg{fill:var(--canvas);stroke:var(--frame);stroke-width:1.1}
+.dg .div{stroke:var(--el-line);stroke-width:1}
+.dg .cn{fill:none;stroke:var(--line);stroke-width:1.1}
+.dg .dash{stroke-dasharray:6 4}
+.dg .ll{stroke:var(--frame);stroke-dasharray:5 4}
+.dg .elbl{paint-order:stroke;stroke:var(--canvas);stroke-width:4px;stroke-linejoin:round;font-size:10.5px;fill:var(--ink-2)}
+.dg .el{cursor:pointer}
+.dg .el:hover .shape,.dg .el:hover .shape2,.dg .el:hover .shape3,.dg .el:hover .note,.dg .el:hover .hollow{stroke:var(--sel)}
+.dg .handle{fill:var(--sel);stroke:var(--canvas)}
+.dg .selbox{fill:none;stroke:var(--sel);stroke-dasharray:3 2}
+.mk-line{fill:none;stroke:var(--line);stroke-width:1.2}
+.mk-fill{fill:var(--line);stroke:var(--line)}
+.mk-hollow{fill:var(--canvas);stroke:var(--line);stroke-width:1.2}
+
+/* generated report */
+.report{background:var(--chrome-2);padding:24px 16px 40px;min-height:100%}
+.page{max-width:860px;margin:0 auto;background:var(--paper);border:1px solid var(--border);box-shadow:0 2px 10px rgb(0 0 0 / .08);padding:44px 52px}
+.page h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em;text-wrap:balance}
+.page h2{font-size:18px;margin:36px 0 8px;padding-bottom:5px;border-bottom:2px solid var(--accent);text-wrap:balance}
+.page h3{font-size:14px;margin:22px 0 6px;color:var(--ink);text-wrap:balance}
+.page p,.page li{max-width:68ch}
+.page p{margin:0 0 10px}
+.page code{font-family:var(--mono);font-size:.88em;background:var(--chrome);padding:0 4px;border-radius:3px;white-space:nowrap}
+.sub{color:var(--ink-2);margin:0 0 20px;font-size:14px}
+.meta{display:grid;grid-template-columns:max-content 1fr;gap:3px 18px;font-size:12.5px;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);padding:10px 0;margin:0 0 20px}
+.meta dt{color:var(--ink-3)}.meta dd{margin:0}
+.toc{columns:2;column-gap:28px;padding-left:18px;margin:0 0 6px;font-size:12.5px}
+.toc a{color:var(--accent);text-decoration:none}.toc a:hover{text-decoration:underline}
+.fig{margin:12px 0 4px;border:1px solid var(--border-soft);overflow-x:auto;background:var(--canvas);cursor:zoom-in;padding:8px}
+.fig svg{width:100%;height:auto;min-width:560px;display:block}
+.cap{font-size:11.5px;color:var(--ink-3);margin:4px 0 14px}
+.cap button{border:none;background:none;color:var(--accent);cursor:pointer;padding:0;font-size:inherit;text-decoration:underline}
+.tbl{overflow-x:auto;margin:8px 0 14px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{border:1px solid var(--border-soft);padding:5px 8px;text-align:left;vertical-align:top}
+th{background:var(--chrome);font-weight:600;color:var(--ink-2);font-size:11.5px}
+td:first-child{white-space:nowrap}
+.tag{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:9px;background:var(--accent-soft);color:var(--ink)}
+
+/* properties */
+.props{display:grid;grid-template-columns:max-content minmax(0,1fr);font-size:12px;margin:0}
+.props dt,.props dd{padding:3px 8px;border-bottom:1px solid var(--border-soft);margin:0}
+.props dt{color:var(--ink-3);background:var(--chrome)}
+.props dd{overflow-wrap:anywhere}
+.notes{padding:8px 10px;font-size:12.5px;line-height:1.5;color:var(--ink)}
+.notes p{margin:0 0 8px}
+.notes code{font-family:var(--mono);font-size:.88em}
+.ellist{list-style:none;margin:0;padding:2px 0 8px;font-size:12px}
+.ellist button{display:block;width:100%;text-align:left;background:none;border:none;padding:2px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ellist button:hover{background:var(--accent-soft)}
+.ellist button.on{background:var(--accent);color:var(--on-accent)}
+.ellist small{color:var(--ink-3)}
+.ellist button.on small{color:inherit}
+
+.status{display:flex;gap:16px;align-items:center;padding:3px 10px;background:var(--chrome-2);border-top:1px solid var(--border);font-size:11px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
+.status .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+@media (max-width:1100px){.main{grid-template-columns:220px minmax(0,1fr)}.main>.pane:last-child{display:none}}
+@media (max-width:760px){
+  body{height:auto}
+  .win{height:auto}
+  .main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto}
+  .main>.pane:first-child .pscroll{max-height:170px}
+  .main>.pane+.pane{border-left:none;border-top:1px solid var(--border)}
+  .center .view{height:auto;max-height:none;overflow:visible}
+  .canvas{overflow-x:auto}
+  .page{padding:24px 18px}
+  .toc{columns:1}
+  .rgroup.hide-sm{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="m-open" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="mk-line" d="M1,1 L11,6 L1,11"/></marker>
+    <marker id="m-fill" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="mk-fill" d="M1,1 L11,6 L1,11 z"/></marker>
+    <marker id="m-tri" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="mk-hollow" d="M1,1 L13,7 L1,13 z"/></marker>
+    <marker id="m-dia" viewBox="0 0 14 10" refX="13" refY="5" markerWidth="14" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="mk-fill" d="M1,5 L7,1 L13,5 L7,9 z"/></marker>
+  </defs>
+</svg>
+
+<div class="win">
+  <div class="titlebar">
+    <svg class="logo" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="2" fill="var(--accent)"/><rect x="3.5" y="4" width="4" height="3" fill="var(--paper)"/><rect x="8.5" y="9" width="4" height="3" fill="var(--paper)"/><path d="M5.5 7v3.5h3" stroke="var(--paper)" fill="none"/></svg>
+    <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="t"><b>TangTripPlanner.qea</b> — Agent Model · <span id="tt">Model report</span></div>
+  </div>
+
+  <div class="ribbon">
+    <div class="rtabs" aria-hidden="true"><span>Start</span><span>Design</span><span>Layout</span><span>Develop</span><span class="on">Publish</span><span>Simulate</span></div>
+    <div class="rbody">
+      <div class="rgroup"><div class="btns">
+        <button class="rb" id="b-report" title="Open the generated model report"><svg viewBox="0 0 20 20"><path d="M4 2h9l3 3v13H4z" fill="var(--paper)" stroke="var(--ink-2)"/><path d="M7 7h6M7 10h6M7 13h4" stroke="var(--accent)"/></svg>Report</button>
+      </div><div class="cap">Documentation</div></div>
+      <div class="rgroup"><div class="btns">
+        <button class="rb" id="b-prev" title="Previous diagram"><svg viewBox="0 0 20 20"><path d="M12 4l-6 6 6 6" fill="none" stroke="var(--ink-2)" stroke-width="2"/></svg>Previous</button>
+        <button class="rb" id="b-next" title="Next diagram"><svg viewBox="0 0 20 20"><path d="M8 4l6 6-6 6" fill="none" stroke="var(--ink-2)" stroke-width="2"/></svg>Next</button>
+      </div><div class="cap">Navigate</div></div>
+      <div class="rgroup"><div class="btns">
+        <button class="rb" id="b-zo" title="Zoom out"><svg viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="var(--ink-2)" stroke-width="1.6"/><path d="M12.5 12.5l5 5M6 8.5h5" stroke="var(--ink-2)" stroke-width="1.6"/></svg>Zoom out</button>
+        <button class="rb" id="b-z1" title="Actual size"><svg viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/><text x="10" y="13.5" text-anchor="middle" font-size="8" fill="var(--ink-2)" font-family="sans-serif">1:1</text></svg>100%</button>
+        <button class="rb" id="b-zi" title="Zoom in"><svg viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="var(--ink-2)" stroke-width="1.6"/><path d="M12.5 12.5l5 5M6 8.5h5M8.5 6v5" stroke="var(--ink-2)" stroke-width="1.6"/></svg>Zoom in</button>
+        <button class="rb" id="b-fit" title="Fit diagram to window"><svg viewBox="0 0 20 20"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4" fill="none" stroke="var(--ink-2)" stroke-width="1.6"/></svg>Fit</button>
+      </div><div class="cap">Diagram</div></div>
+      <div class="rgroup hide-sm"><div class="btns">
+        <span class="rb" style="cursor:default"><svg viewBox="0 0 20 20"><rect x="2" y="4" width="16" height="12" rx="2" fill="none" stroke="var(--ink-3)"/><text x="10" y="13" text-anchor="middle" font-size="6.5" fill="var(--ink-2)" font-family="sans-serif">UML</text></svg>UML 2.5</span>
+      </div><div class="cap">Notation</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <section class="pane" aria-label="Project browser">
+      <div class="phead">Browser</div>
+      <div class="pscroll"><ul class="tree" id="tree"></ul></div>
+    </section>
+    <section class="pane center" aria-label="Diagram">
+      <div class="dtabs" id="dtabs" role="tablist"></div>
+      <div class="view" id="view"></div>
+    </section>
+    <section class="pane" aria-label="Properties">
+      <div class="phead">Properties</div>
+      <div class="pscroll" id="props"></div>
+    </section>
+  </div>
+
+  <div class="status"><span class="grow" id="st-l">Ready</span><span id="st-z">Zoom 100%</span><span>Tang · Prolog + Python</span></div>
+</div>
+
+<script>
+/* ---------- tiny diagram engine (EA-flavoured UML) ---------- */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let S=[],E=[];
+function reg(o,label,type){const id=o.id||('e'+E.length);E.push({id,name:(o.name||label||'').replace(/\n/g,' '),type:o.type||type,doc:o.doc||''});return id}
+function put(o,label,type,inner){const id=reg(o,label,type);S.push(`<g class="el" data-el="${id}">${inner}</g>`)}
+function tl(x,cy,text,cls='',anchor='middle',lh=13){const ls=String(text).split('\n');const y0=cy-(ls.length-1)*lh/2;
+  return ls.map((l,i)=>`<text x="${x}" y="${y0+i*lh}" class="${cls}" text-anchor="${anchor}" dominant-baseline="central">${esc(l)}</text>`).join('')}
+function label(text,cy,x,anchor){const ls=String(text).split('\n');return ls.map((l,i)=>{const bold=i===0&&ls.length>1;return ''}).join('')}
+// action / rounded box: first line bold when multi-line
+function body(x,y,w,h,text){const ls=String(text).split('\n');const lh=13,cy=y+h/2,y0=cy-(ls.length-1)*lh/2;
+  return ls.map((l,i)=>`<text x="${x+w/2}" y="${y0+i*lh}" text-anchor="middle" dominant-baseline="central" class="${i===0?'b':'s'}">${esc(l)}</text>`).join('')}
+function act(x,y,w,h,text,o={}){put(o,text.split('\n')[0],'Action',`<rect class="${o.cls||'shape'}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${o.rx??9}"/>`+body(x,y,w,h,text))}
+function proc(x,y,w,h,text,o={}){act(x,y,w,h,text,{rx:0,type:'Process',...o})}
+function term(x,y,w,h,text,o={}){act(x,y,w,h,text,{rx:h/2,type:'Terminator',...o})}
+function dec(cx,cy,w,h,text,o={}){put(o,text,o.type||'Decision',`<path class="shape" d="M${cx},${cy-h/2} L${cx+w/2},${cy} L${cx},${cy+h/2} L${cx-w/2},${cy} Z"/>`+tl(cx,cy,text,'s',undefined,12))}
+function init(cx,cy,o={}){put(o,'Initial','Initial Node',`<circle class="ink" cx="${cx}" cy="${cy}" r="8"/>`)}
+function fin(cx,cy,o={}){put(o,'Final','Activity Final',`<circle class="hollow" cx="${cx}" cy="${cy}" r="10"/><circle class="ink" cx="${cx}" cy="${cy}" r="6"/>`)}
+function ffin(cx,cy,o={}){put(o,'Flow final','Flow Final',`<circle class="hollow" cx="${cx}" cy="${cy}" r="9"/><path class="cn" d="M${cx-6},${cy-6} L${cx+6},${cy+6} M${cx+6},${cy-6} L${cx-6},${cy+6}"/>`)}
+function note(x,y,w,h,text,o={}){const f=10;put(o,text.split('\n')[0],'Note',`<path class="note" d="M${x},${y} H${x+w-f} L${x+w},${y+f} V${y+h} H${x} Z M${x+w-f},${y} V${y+f} H${x+w}"/>`+
+  String(text).split('\n').map((l,i)=>`<text x="${x+8}" y="${y+15+i*13.5}" class="s">${esc(l)}</text>`).join(''))}
+function frame(kind,name,w,h){const t=`${kind} ${name}`;const lw=Math.round(t.length*6.4)+22;
+  return `<rect class="frame" x="8" y="8" width="${w-16}" height="${h-16}"/><path class="ftab" d="M8,8 H${8+lw} V22 L${lw},30 H8 Z"/><text x="16" y="19.5" dominant-baseline="central"><tspan class="b">${esc(kind)}</tspan> ${esc(name)}</text>`}
+function region(x,y,w,h,title,o={}){S.push(`<rect class="region" x="${x}" y="${y}" width="${w}" height="${h}" rx="${o.rx??10}"/><text x="${x+12}" y="${y+16}" class="b" dominant-baseline="central">${esc(title)}</text>`)}
+function lane(x,y,w,h,title){S.push(`<rect class="lane" x="${x}" y="${y}" width="${w}" height="${h}"/><rect class="lanehd" x="${x}" y="${y}" width="${w}" height="26"/>`+tl(x+w/2,y+13,title,'b'))}
+function pkg(x,y,w,h,title){const tw=Math.round(title.length*6.6)+20;S.push(`<rect class="pkgtab" x="${x}" y="${y}" width="${tw}" height="18"/><rect class="pkg" x="${x}" y="${y+18}" width="${w}" height="${h-18}"/><text x="${x+8}" y="${y+9.5}" class="b" dominant-baseline="central">${esc(title)}</text>`)}
+function comp(x,y,w,h,name,sub,o={}){const ix=x+w-22,iy=y+8;
+  const icon=o.file?`<path class="hollow" d="M${ix},${iy} h9 l4,4 v12 h-13 z"/>`:`<rect class="hollow" x="${ix+2}" y="${iy}" width="13" height="15"/><rect class="hollow" x="${ix-2}" y="${iy+3}" width="7" height="3.5"/><rect class="hollow" x="${ix-2}" y="${iy+8.5}" width="7" height="3.5"/>`;
+  put(o,name,o.type||(o.file?'Artifact':'Component'),`<rect class="${o.cls||'shape'}" x="${x}" y="${y}" width="${w}" height="${h}"/>${icon}`+
+  `<text x="${x+w/2}" y="${y+(o.top?18:h/2-8)}" text-anchor="middle" dominant-baseline="central" class="s">«${esc(o.st||(o.file?'file':'component'))}»</text>`+
+  `<text x="${x+w/2}" y="${y+(o.top?33:h/2+6)}" text-anchor="middle" dominant-baseline="central" class="b">${esc(name)}</text>`+
+  (sub?`<text x="${x+w/2}" y="${y+(o.top?47:h/2+20)}" text-anchor="middle" dominant-baseline="central" class="m">${esc(sub)}</text>`:''))}
+function cls(x,y,w,name,st,attrs,o={}){const hh=st?38:24,h=o.h||hh+attrs.length*14+10;
+  put(o,name,o.type||'Class',`<rect class="${o.cls||'shape'}" x="${x}" y="${y}" width="${w}" height="${h}"/><line class="div" x1="${x}" x2="${x+w}" y1="${y+hh}" y2="${y+hh}"/>`+
+  (st?`<text x="${x+w/2}" y="${y+12}" text-anchor="middle" dominant-baseline="central" class="s">«${esc(st)}»</text>`:'')+
+  `<text x="${x+w/2}" y="${y+(st?27:12)}" text-anchor="middle" dominant-baseline="central" class="b">${esc(name)}</text>`+
+  attrs.map((a,i)=>`<text x="${x+8}" y="${y+hh+12+i*14}" dominant-baseline="central">${esc(a)}</text>`).join(''));return h}
+function state(x,y,w,h,name,lines,o={}){put(o,name,'State',`<rect class="shape" x="${x}" y="${y}" width="${w}" height="${h}" rx="12"/><line class="div" x1="${x}" x2="${x+w}" y1="${y+24}" y2="${y+24}"/>`+
+  `<text x="${x+w/2}" y="${y+12}" text-anchor="middle" dominant-baseline="central" class="b">${esc(name)}</text>`+
+  lines.map((l,i)=>`<text x="${x+8}" y="${y+38+i*13}" dominant-baseline="central" class="s">${esc(l)}</text>`).join(''))}
+function uc(cx,cy,rx,ry,text,o={}){put(o,text,'Use Case',`<ellipse class="shape" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"/>`+tl(cx,cy,text))}
+function actor(cx,cy,name,o={}){put(o,name,'Actor',`<circle class="hollow" cx="${cx}" cy="${cy-26}" r="8"/><path class="cn" d="M${cx},${cy-18} V${cy+4} M${cx-13},${cy-10} H${cx+13} M${cx},${cy+4} L${cx-11},${cy+20} M${cx},${cy+4} L${cx+11},${cy+20}"/>`+tl(cx,cy+32,name,'b'))}
+function life(x,name,top,bottom,o={}){const w=o.w||130;
+  S.push(`<line class="ll" x1="${x}" x2="${x}" y1="${top+34}" y2="${bottom}"/>`);
+  if(o.actor){put(o,name,'Actor',`<circle class="hollow" cx="${x}" cy="${top+2}" r="6"/><path class="cn" d="M${x},${top+8} V${top+18} M${x-9},${top+12} H${x+9} M${x},${top+18} L${x-7},${top+26} M${x},${top+18} L${x+7},${top+26}"/>`+tl(x,top+36,name,'b'))}
+  else put(o,name,'Lifeline',`<rect class="shape" x="${x-w/2}" y="${top}" width="${w}" height="34"/>`+tl(x,top+17,name+(o.sub?'\n'+o.sub:''),'b'))}
+function bar(x,y1,y2){S.push(`<rect class="shape" x="${x-5}" y="${y1}" width="10" height="${y2-y1}"/>`)}
+function msg(x1,x2,y,text,o={}){const dx=x2>x1?-5:5;edge([[x1-dx,y],[x2+dx,y]],{lbl:text,dash:o.ret,end:o.ret?'open':'fill',at:[(x1+x2)/2,y-7]})}
+function self(x,y,text){edge([[x+5,y],[x+40,y],[x+40,y+18],[x+5,y+18]],{end:'fill'});S.push(tl(x+46,y+9,text,'elbl','start'))}
+function frag(x,y,w,h,op,guard){const lw=op.length*7+22;S.push(`<rect class="frame" x="${x}" y="${y}" width="${w}" height="${h}"/><path class="ftab" d="M${x},${y} H${x+lw} V${y+12} L${x+lw-7},${y+19} H${x} Z"/><text x="${x+7}" y="${y+10}" class="b" dominant-baseline="central">${esc(op)}</text><text x="${x+lw+8}" y="${y+11}" class="s" dominant-baseline="central">${esc(guard)}</text>`)}
+function edge(pts,o={}){const d='M'+pts.map(p=>p.join(',')).join(' L');const end=o.end??'open';
+  S.push(`<path class="cn${o.dash?' dash':''}" d="${d}"${end!=='none'?` marker-end="url(#m-${end})"`:''}${o.start?` marker-start="url(#m-${o.start})"`:''}/>`);
+  if(o.lbl){let lx,ly,anc='middle';
+    if(o.at){[lx,ly]=o.at;anc=o.anc||'middle'}else{let best=-1,bi=0;for(let i=0;i<pts.length-1;i++){const L=Math.hypot(pts[i+1][0]-pts[i][0],pts[i+1][1]-pts[i][1]);if(L>best){best=L;bi=i}}
+      const a=pts[bi],b=pts[bi+1];lx=(a[0]+b[0])/2;ly=(a[1]+b[1])/2;if(a[1]===b[1])ly-=8;else{lx+=6;anc='start'}}
+    S.push(tl(lx,ly,o.lbl,'elbl',anc,12))}}
+function txt(x,y,s,anc='middle',cls='elbl'){S.push(tl(x,y,s,cls,anc,12))}
+
+/* ---------- the model ---------- */
+const PKG={def:'1 · Agent definition',arch:'2 · Architecture',beh:'3 · Behaviour',alg:'4 · Reasoning algorithms'};
+const KIND={req:['req','Requirements'],uc:['uc','Use Case'],custom:['custom','Custom (agent schema)'],cmp:['cmp','Component'],class:['class','Class'],analysis:['analysis','Flowchart'],act:['act','Activity'],sd:['sd','Sequence'],stm:['stm','State Machine']};
+
+const D=[
+{id:'peas',pkg:'def',kind:'req',name:'PEAS description',w:900,h:540,
+ summary:'The planner described as a rational agent: what counts as a good trip, the world it works in, how it acts and what it perceives.',
+ doc:`<p>Tang is modelled as a <b>goal-based, utility-based planning agent</b>. Its goal is a feasible round trip from a Thai home airport to one country and back within the traveller's days. Among all feasible trips it picks the ones that score best on the traveller's chosen preference (cheapest, fastest, fewest flights or balanced).</p>
+ <p>Every judgement lives in <code>prolog/trip.pl</code>. Python only collects percepts (the form, live fares) and carries out actions (drawing the plan, the map and the booking links).</p>`,
+ extra:`<h3>PEAS table</h3><div class="tbl"><table><thead><tr><th>Element</th><th>For Tang</th><th>Where in the code</th></tr></thead><tbody>
+ <tr><td>Performance</td><td>Total cost within budget; flying minutes; number of flights; enjoyment (liked activities); penalty for empty days; visa-free stay respected</td><td><code>plan_key/3</code>, <code>score/3</code>, <code>affordable/3</code>, <code>reasons/11</code></td></tr>
+ <tr><td>Environment</td><td>Traveller from Bangkok, Chiang Mai or Phuket; 4 destination countries, 14 cities, 54 flights, ground links, 107 attractions, hotels, seasons, Thai holidays, visa rules; optional Aviasales fares</td><td>Section 1 facts, <code>busy/3</code>, <code>thai_holiday/3</code>, <code>live_fare/3</code></td></tr>
+ <tr><td>Actuators</td><td>Up to three ranked plans (A/B/C) with ticket, day-by-day plan, cost table and reasons; animated search replay and journey on the map; booking links</td><td><code>ResultsPanel</code>, <code>MapView</code>, <code>ui/booking.py</code></td></tr>
+ <tr><td>Sensors</td><td>Trip form (from, to, date, days, people, budget, interests, pace, preference) and extra options; live fares and departure times; cached fares</td><td><code>TangWindow.form</code>, <code>option_terms()</code>, <code>set_live_fares()</code></td></tr>
+ </tbody></table></div>
+ <h3>Task-environment properties</h3><div class="tbl"><table><thead><tr><th>Property</th><th>Value</th><th>Why</th></tr></thead><tbody>
+ <tr><td>Observable</td><td>Fully (as modelled)</td><td>The knowledge base holds every flight, link and price the agent reasons about. Real prices are only partly observed: Aviasales returns fares users found in the last 48 hours.</td></tr>
+ <tr><td>Agents</td><td>Single</td><td>No other agent competes for seats or rooms in the model.</td></tr>
+ <tr><td>Deterministic</td><td>Deterministic</td><td>Flights run daily at fixed times; a connection either fits the 90 min – 12 h window or it doesn't.</td></tr>
+ <tr><td>Episodic</td><td>Sequential within a plan, episodic across queries</td><td>Arrival time fixes the free hours of day 1, a night ride removes a hotel night. Each query starts from <code>reset_search</code>.</td></tr>
+ <tr><td>Static</td><td>Static</td><td>Facts do not change while Prolog deliberates; live fares are asserted before the query.</td></tr>
+ <tr><td>Discrete</td><td>Discrete</td><td>Cities, flights, days and minutes.</td></tr>
+ <tr><td>Known</td><td>Known</td><td>All rules (time zones, prices by season, day sharing) are written out in the knowledge base.</td></tr>
+ </tbody></table></div>`,
+ draw(){
+  cls(330,205,240,'Tang Trip Planner','agent',['type: goal- + utility-based','reasoner: SWI-Prolog · trip.pl','body: PySide6 desktop app','bridge: pyswip (planner.py)'],{id:'agent',type:'Agent',doc:'The rational agent. Prolog decides; Python perceives and acts.'});
+  cls(40,40,270,'Performance measure','performance',['total cost ≤ budget (฿)','flying minutes (fastest)','number of flights (fewest)','enjoyment: liked activities','penalty: empty days × day cost','visa-free days respected'],{id:'P',type:'Requirement',doc:'Scored by plan_key/3 and score/3. "Balanced" = cost + 10 × minutes − ฿1,500 × enjoyment; "anywhere" ranks countries by cost − ฿3,000 × enjoyment.'});
+  cls(590,40,270,'Environment','environment',['traveller at BKK · CNX · HKT','4 countries · 14 cities','54 flights · 18 ground links','107 attractions · hotels','seasons · Thai holidays · visas','Aviasales fares (optional)'],{id:'E',type:'Requirement',doc:'Section 1 of trip.pl plus the dynamic facts Python asserts before each query.'});
+  cls(40,370,270,'Actuators','actuators',['ranked plans A / B / C','ticket · day plan · cost table','reasons for every choice','map: search replay + journey','booking links (flights, hotels)','status ticker'],{id:'A',type:'Requirement',doc:'ResultsPanel.show_plan, MapView.replay / travel and ui/booking.py links.'});
+  cls(590,370,270,'Sensors','sensors',['trip form: from · to · date · days','people · budget · interests','pace · preference','options: flights, airlines, hotel…','live_fare/3 · live_departure/2','cache/fares.json'],{id:'S',type:'Requirement',doc:'Form values are whitelisted in Planner.plan and option_terms before they become a Prolog query.'});
+  edge([[330,230],[310,170]],{lbl:'measured by',at:[300,206],anc:'end'});
+  edge([[570,230],[590,170]],{lbl:'acts in',at:[600,206],anc:'start'});
+  edge([[330,295],[310,370]],{lbl:'acts through',at:[300,335],anc:'end'});
+  edge([[590,370],[570,295]],{lbl:'perceives through',at:[600,335],anc:'start'});
+  note(330,360,240,128,'Task environment\n• fully observable KB\n  (live fares: last 48 h only)\n• deterministic · static · discrete\n• sequential inside a plan,\n  episodic per query\n• single agent · rules known',{id:'envnote',doc:'AIMA task-environment classification for the planner.'});
+  edge([[450,311],[450,360]],{dash:true,end:'none'});
+ }},
+{id:'usecases',pkg:'def',kind:'uc',name:'Traveller use cases',w:860,h:540,
+ summary:'What a traveller can do with the agent, and the one external system it talks to.',
+ doc:`<p>The traveller is the only human actor. Planning a round trip is the main use case; the others refine the request or consume the answer. Fetching live fares <i>extends</i> planning only when a Travelpayouts token or a fare cache is present. Comparing plans always <i>includes</i> the reasons Prolog produced for each plan.</p>`,
+ draw(){
+  actor(100,270,'Traveller',{id:'traveller',doc:'A Thai resident leaving from Bangkok, Chiang Mai or Phuket.'});
+  region(215,40,525,470,'Tang trip planner',{rx:0});
+  const ucs=[['plan','Plan a round trip',100,'Main goal: plan_trip/11 returns up to 3 plans.'],['dest','Pick a country or "anywhere"',160,'"anywhere" makes Prolog compare all four countries.'],['prefs','Set budget, interests and pace',220,'Interests steer pick/6; pace moves each city\'s minimum stay.'],['opts','Set extra options',280,'max_flights, airlines, night flights, hotel level, own cities, getting around.'],['cmp','Compare plans A / B / C',340,'Plans differ in their city sets (different/3).'],['watch','Watch search replay and journey',400,'MapView replays explored edges, then flies the plan.'],['book','Open booking links',460,'Aviasales and Booking.com links for each date.']];
+  ucs.forEach(([id,t,y,doc])=>{uc(380,y,140,21,t,{id,doc});edge([[125,262],[240,y]],{end:'none'})});
+  uc(625,175,92,24,'Fetch live fares',{id:'fares',doc:'live_prices.fares_for(): exact day, then month fallback; cached 24 h.'});
+  uc(625,405,92,24,'Read reasons\nfor each plan',{id:'why',doc:'reasons/11 returns lists that planner.py turns into English sentences.'});
+  edge([[560,158],[505,112]],{dash:true,lbl:'«extend»',at:[548,128],anc:'start'});
+  edge([[500,348],[548,392]],{dash:true,lbl:'«include»',at:[530,358],anc:'start'});
+  actor(800,180,'Aviasales API',{id:'avs',doc:'Travelpayouts prices_for_dates endpoint (external system).'});
+  edge([[717,175],[780,175]],{end:'none'});
+ }},
+{id:'arch',pkg:'arch',kind:'custom',name:'Agent architecture',w:920,h:600,
+ summary:'The classic utility-based agent schema with each box mapped to the predicates that implement it.',
+ doc:`<p>The schema follows the utility-based agent of Russell &amp; Norvig. Percepts enter as Prolog facts: <code>trip_month/1</code>, <code>option/2</code> and the optional <code>live_fare/3</code> and <code>live_departure/2</code>. The agent then predicts outcomes by search: best-first flight search, tours over ground links and <code>build_plan</code>. It scores each predicted trip with <code>score/3</code> and acts by ranking and choosing up to three plans.</p>
+ <p>The right column is the agent's model of the world. Time-zone and connection rules say how the world evolves, the flight, ground and hotel facts say what each action does, and the preference keys are the utility function.</p>`,
+ draw(){
+  region(30,45,230,530,'Environment');
+  region(290,45,610,530,'Agent · Python body + Prolog reasoner');
+  const ev=[['traveller','Traveller','fills the trip form',93],['avs','Aviasales Data API','prices_for_dates · 48 h',193],['cal','Calendar & seasons','month of travel',293],['world','Travel world','flights · trains · hotels',393],['screen',"Traveller's screen",'ticket · map · links',473]];
+  ev.forEach(([id,a,b,y])=>act(50,y,190,54,a+'\n'+b,{id,cls:'shape3',rx:4,type:'Environment',doc:''}));
+  act(320,90,160,60,'Sensors\ntrip form → query terms\nlive_fare/3 facts',{id:'sensors',cls:'shape',rx:0,type:'Sensor',doc:'TangWindow.form and Planner.option_terms build a whitelisted query; set_live_fares asserts real fares.'});
+  act(320,470,160,60,'Actuators\nResultsPanel · MapView\nbooking links',{id:'actuators',rx:0,type:'Actuator',doc:'show_plan(), replay(), travel() and the booking URLs.'});
+  const st=[['now','What the world is like now','trip_month/1 · option/2 · live_fare/3',93],['next','What it will be like if I do A','best_routes/5 · round_tour/4 · build_plan',193],['happy','How happy I will be','score/3 · plan_key/3 by preference',293],['do','What action I should do now','affordable · rank/3 · different/3',393]];
+  st.forEach(([id,a,b,y])=>act(510,y,220,54,a+'\n'+b,{id,rx:0,type:'Agent function',doc:''}));
+  const kn=[['evolves','How the world evolves','to_utc · departure/5',93],['actions','What my actions do','flight/6 · ground/5 · stay/2',193],['utility','Utility','cheapest · fastest ·\nfewest · balanced',293],['limits','Constraints','chosen_ok · airline_ok\nvisa_free · stay_range',393]];
+  kn.forEach(([id,a,b,y])=>act(752,y,134,54,a+'\n'+b,{id,cls:'shape2',rx:22,type:'Knowledge',doc:''}));
+  edge([[240,120],[320,120]],{lbl:'percepts',at:[280,110]});
+  edge([[240,220],[275,220]],{end:'none'});
+  edge([[240,320],[275,320],[275,138],[320,138]]);
+  edge([[480,120],[510,120]]);
+  [147,247,347].forEach(y=>edge([[620,y],[620,y+46]]));
+  [120,220,320,420].forEach(y=>edge([[752,y],[730,y]]));
+  edge([[620,447],[620,500],[480,500]]);
+  edge([[320,500],[240,500]],{lbl:'actions',at:[280,490]});
+  txt(298,420,'facts compiled\ninto trip.pl','start','elbl');
+  edge([[240,420],[290,420]],{end:'none',dash:true});
+ }},
+{id:'components',pkg:'arch',kind:'cmp',name:'Components and files',w:960,h:640,
+ summary:'How the Python UI, the pyswip bridge, the knowledge base and outside data fit together.',
+ doc:`<p>The app has three layers. The <b>UI layer</b> (PySide6) owns no logic. The <b>bridge</b> turns form values into a Prolog query string and Prolog's nested lists back into dictionaries. The <b>knowledge base</b> <code>trip.pl</code> holds every decision, organised in the ten sections shown.</p>
+ <p>Only known atoms reach the query, so typed input cannot change what Prolog is asked. Live fares run on a worker thread so the window stays responsive. Their results are cached in <code>cache/fares.json</code> for 24 hours, which also lets a demo run offline.</p>`,
+ draw(){
+  pkg(30,45,910,150,'UI layer · PySide6');
+  comp(50,95,170,70,'TangWindow','app.py',{id:'win',doc:'Main window: form, status ticker, search() and the phase state machine.'});
+  comp(250,95,160,70,'MapView','ui/map_view.py',{id:'map',doc:'Asia map: replays explored flight edges, flies the plan, zooms the camera.'});
+  comp(440,95,170,70,'ResultsPanel','ui/results.py',{id:'res',doc:'Ticket, reasons, day-by-day plan and cost breakdown.'});
+  comp(640,95,130,70,'booking','ui/booking.py',{id:'bk',doc:'Dates and links to Aviasales flights and Booking.com hotels.'});
+  comp(800,95,120,70,'widgets · theme','ui/',{id:'wt',doc:'Segmented buttons, chips, steppers, colours and stylesheet.'});
+  edge([[220,130],[250,130]]);
+  edge([[180,95],[180,78],[525,78],[525,95]]);
+  edge([[610,130],[640,130]]);
+  pkg(30,235,610,135,'Bridge · Python');
+  comp(50,285,200,70,'Planner','backend/planner.py',{id:'planner',doc:'Consults trip.pl, validates input, builds plan_trip/11, reshapes results.'});
+  comp(290,285,130,70,'geo','backend/geo.py',{id:'geo',doc:'Latitude/longitude → map coordinates.'});
+  comp(460,285,160,70,'live_prices','backend/live_prices.py',{id:'lp',doc:'Fetches fares on 8 threads; exact day first, month fallback.'});
+  pkg(670,235,270,135,'External service');
+  comp(690,285,230,70,'Aviasales Data API','api.travelpayouts.com',{id:'api',st:'external',doc:'Cheapest fares found by users in the last 48 hours.'});
+  pkg(30,415,610,200,'Knowledge · SWI-Prolog');
+  comp(50,455,570,145,'trip.pl','prolog/trip.pl · 1,252 lines',{id:'kb',top:true,st:'knowledge base',doc:'All reasoning, written with only what Clocksin & Mellish teaches.'});
+  ['1 Facts','2 Helpers','3 Time','3a Options','3b Prices','4 Search','5 Planning','6 Ranking','7 Reasons','8 API'].forEach((s,i)=>{const x=65+(i%5)*110,y=512+Math.floor(i/5)*44;S.push(`<rect class="shape2" x="${x}" y="${y}" width="100" height="34"/>`+tl(x+50,y+17,s,'s'))});
+  pkg(670,415,270,200,'Data files');
+  comp(690,462,230,52,'cache/fares.json','',{id:'cache',file:true,doc:'Fetched fares with timestamps; fresh for 24 hours.'});
+  comp(690,537,230,52,'shared/asia_map.json','',{id:'outline',file:true,doc:'Country outlines from Natural Earth (tools/build_map.py).'});
+  edge([[135,165],[135,285]],{dash:true,lbl:'plan() · map_data()',at:[141,225],anc:'start'});
+  edge([[200,165],[200,215],[540,215],[540,285]],{dash:true,lbl:'fares_for() · worker thread',at:[370,207]});
+  edge([[250,320],[290,320]],{dash:true});
+  edge([[620,320],[690,320]],{dash:true,lbl:'HTTPS',at:[655,312]});
+  edge([[150,355],[150,455]],{dash:true,lbl:'pyswip: plan_trip/11\nassertz live_fare/3',at:[156,428],anc:'start'});
+  edge([[540,355],[540,388],[662,388],[662,488],[690,488]],{dash:true,lbl:'read / write',at:[600,380]});
+  edge([[230,355],[230,400],[650,400],[650,563],[690,563]],{dash:true,lbl:'outlines',at:[300,392]});
+ }},
+{id:'domain',pkg:'arch',kind:'class',name:'Knowledge base model',w:980,h:610,
+ summary:'The facts in trip.pl read as a class model, plus the plan term the agent builds.',
+ doc:`<p>Each fact family in section 1 of <code>trip.pl</code> is drawn as a class. Associations follow the arguments that join them: a flight's <code>From</code> and <code>To</code> are cities, a ground link joins two cities in both directions through <code>linked/5</code>. A <b>Plan</b> is the compound term <code>plan/8</code>, built by <code>build_plan/11</code> and flattened for Python by <code>plan_row/4</code>.</p>
+ <p>Prices are not stored final. <code>flight_price/5</code> and <code>room_price/2</code> apply the month's season and Thai-holiday percentages, or use a live fare when one exists. A full-service airline is priced at 160 % of the live budget fare.</p>`,
+ draw(){
+  cls(40,60,200,'Country','fact',['id, name, thaiName','dailyCostTHB','visa_free(days)'],{id:'country',doc:'country/4 and visa_free/2.'});
+  cls(330,60,220,'City','fact',['id, name, thaiName, code','latitude, longitude','airport(tz)  0..1','home: BKK · CNX · HKT'],{id:'city',doc:'city/7, airport/2, home/1.'});
+  cls(660,60,270,'Flight','fact',['code, departHHMM','minutes, priceTHB','airline(code) → low_cost?','overridden by live_fare / live_departure'],{id:'flight',doc:'flight/6: one-way economy, daily.'});
+  cls(660,240,270,'Ground link','fact',['mode, priceTHB, minutes','both directions (linked/5)','overnight(mode) saves a hotel night'],{id:'ground',doc:'ground/5: bullet trains, trains, buses, ferries, domestic flights, night rides.'});
+  cls(330,240,220,'Stay','fact',['pricePerNightTHB','stay_range(min, max days)'],{id:'stay',doc:'stay/2 and stay_range/3.'});
+  cls(330,380,220,'Attraction','fact',['name, category','feeTHB, hours'],{id:'attr',doc:'attraction/5: 7 categories match the interests.'});
+  cls(40,240,200,'Season','fact',['busy(months, ±%)','highlight / warning(months)'],{id:'season',doc:'busy/3, highlight/3, warning/3.'});
+  cls(40,380,200,'Thai holiday','fact',['months, +%, name'],{id:'hol',doc:'thai_holiday/3: Songkran, October break, New Year.'});
+  cls(660,400,270,'Plan','result',['country, cities','out legs · ret legs · moves','day(N, kind, city, travel, acts)','costs(fl, gr, ho, da, fe, total)','meta(rooms, nights, landed, min, enjoy, free)'],{id:'plan',cls:'shape2',doc:'plan/8 built by build_plan/11.'});
+  edge([[240,100],[330,100]],{end:'none',lbl:'1          1..*',at:[285,92]});
+  edge([[550,95],[660,95]],{lbl:'from',at:[605,87]});
+  edge([[550,135],[660,135]],{lbl:'to',at:[605,127]});
+  edge([[550,155],[600,155],[600,285],[660,285]],{end:'none',lbl:'a · b',at:[606,220],anc:'start'});
+  edge([[440,166],[440,240]],{end:'none',lbl:'1 · 0..1',at:[446,203],anc:'start'});
+  edge([[330,150],[295,150],[295,420],[330,420]],{end:'none',lbl:'1 · *',at:[289,300],anc:'end'});
+  edge([[140,152],[140,240]],{dash:true,lbl:'prices by month',at:[146,196],anc:'start'});
+  edge([[140,444],[140,575],[965,575],[965,150],[930,150]],{dash:true,lbl:'raises fares out of Thailand',at:[550,567]});
+  edge([[795,400],[795,332]],{start:'dia',lbl:'moves',at:[801,366],anc:'start'});
+  edge([[930,440],[948,440],[948,90],[930,90]],{start:'dia',lbl:'legs',at:[942,265],anc:'end'});
+  edge([[660,440],[600,440],[600,420],[550,420]],{start:'dia',lbl:'activities',at:[605,454]});
+ }},
+{id:'flow',pkg:'beh',kind:'analysis',name:'plan_trip/11 flowchart',w:760,h:920,
+ summary:'The top-level query, from the call Python makes to the stats and rows it returns.',
+ doc:`<p>This is the entry point Python calls. It resets the dynamic database (<code>explored/2</code>, <code>steps/1</code>, <code>flight_memo/4</code>), stores the month and the options as facts, and collects every candidate plan with <code>findall/3</code>.</p>
+ <p>If no plan fits the budget, the whole pool is kept so the traveller still sees the closest options, marked over budget. With a named country the plans are ranked by <code>score/3</code> and thinned to three distinct city sets. With <code>anywhere</code>, each country's best plan competes on cost minus ฿3,000 per enjoyable activity.</p>`,
+ draw(){
+  term(180,40,240,38,'plan_trip/11\ncalled by Planner.plan()',{id:'start'});
+  proc(180,100,240,40,'normalize_interests\n[] → all 7 interests',{id:'p1'});
+  proc(180,160,240,44,'reset_search · set_month · set_options\nretract + assertz dynamic facts',{id:'p2',doc:'Clears explored/2, steps/1 and flight_memo/4; option(Name, Value) facts via =..'});
+  proc(180,224,240,40,'countries_for(Dest)\nanywhere → 4 countries',{id:'p3'});
+  proc(180,284,240,50,'findall candidate/8\ngenerate & test, backtracking',{id:'p4',doc:'See the activity diagram “Generate and test a candidate”.'});
+  proc(180,354,240,40,'affordable(Budget, Plans, Cheap)',{id:'p5'});
+  dec(300,440,170,52,'any plan\nwithin budget?',{id:'d1'});
+  proc(480,420,200,40,'pool = all plans\n(shown as over budget)',{id:'p6'});
+  dec(300,535,170,52,'Dest =\nanywhere?',{id:'d2'});
+  proc(480,580,220,50,'best_per_country\nkey = cost − ฿3,000 × enjoyment',{id:'p7'});
+  proc(40,580,220,50,'rank/3 by score/3\ninsertion sort (insort/2)',{id:'p8',doc:'score = plan_key + free days × (total ÷ days).'});
+  proc(480,655,220,40,'take(3, Ranked)\none plan per country',{id:'p9'});
+  proc(40,655,220,40,'different(3, Ranked)\ndistinct city sets',{id:'p10'});
+  proc(180,740,240,40,'rows/11: reasons/11 + plan_row/4',{id:'p11'});
+  proc(180,800,240,40,'Stats = [Steps, Edges, NFlights,\nNPlans, NCheap]',{id:'p12'});
+  term(200,862,200,36,'return [Stats, Rows]',{id:'end'});
+  [[78,100],[140,160],[204,224],[264,284],[334,354],[394,414]].forEach(([a,b])=>edge([[300,a],[300,b]]));
+  edge([[385,440],[480,440]],{lbl:'[no]',at:[430,432]});
+  edge([[580,460],[580,486],[300,486]],{end:'none'});
+  edge([[300,466],[300,509]],{lbl:'[yes] pool = Cheap',at:[306,497],anc:'start'});
+  edge([[385,535],[590,535],[590,580]],{lbl:'[yes]',at:[430,527]});
+  edge([[215,535],[150,535],[150,580]],{lbl:'[no]',at:[180,527]});
+  edge([[590,630],[590,655]]);edge([[150,630],[150,655]]);
+  edge([[590,695],[590,760],[420,760]]);edge([[150,695],[150,760],[180,760]]);
+  edge([[300,780],[300,800]]);edge([[300,840],[300,862]]);
+  note(470,282,260,62,'Each candidate:\nfly in → round_tour → fly home\n→ build_plan → attach_moves',{id:'n1'});
+  edge([[420,309],[470,309]],{dash:true,end:'none'});
+ }},
+{id:'swim',pkg:'beh',kind:'act',name:'Search request (swimlanes)',w:1070,h:930,
+ summary:'One press of “Find trips”, across the traveller, the window, the fare fetcher, the bridge, Prolog and the map.',
+ doc:`<p>The window first decides whether fares can be fetched: a Travelpayouts token, or at least a saved cache. If so, <code>fares_for()</code> runs on a worker thread and the window polls it every 80 ms, so the UI never freezes. The fares are asserted as facts, then the bridge builds the query.</p>
+ <p>Prolog either answers or the bridge raises <code>PlannerError</code>, which ends the search with a notice. A successful answer is reshaped into dictionaries and handed to the map, which replays every flight edge the search explored before flying the first plan.</p>`,
+ draw(){
+  const L=[['Traveller',30,150],['TangWindow · app.py',180,180],['live_prices.py',360,160],['Planner · planner.py',520,180],['trip.pl · Prolog',700,180],['MapView · ResultsPanel',880,160]];
+  L.forEach(([t,x,w])=>lane(x,40,w,870,t));
+  init(105,90);
+  act(40,115,130,44,'Fill trip form\nfrom, dates, budget…',{id:'a1'});
+  act(40,185,130,40,'Press Find trips',{id:'a2'});
+  act(195,185,150,40,'search()\nphase = searching',{id:'a3'});
+  dec(270,275,130,48,'token or\nfare cache?',{id:'d1'});
+  act(375,251,140,48,'fares_for()\non worker thread',{id:'a4',doc:'ThreadPoolExecutor; the window polls job.done() every 80 ms.'});
+  act(375,321,140,52,'exact day, else month\ncache fresh 24 h',{id:'a5'});
+  act(535,321,150,52,'set_live_fares()\nassertz live_fare/3',{id:'a6',doc:'Also live_departure/2 when the API found one of our exact flights that day.'});
+  act(535,440,150,52,'plan()\nwhitelist atoms · build query',{id:'a7'});
+  act(715,440,150,52,'plan_trip/11\nsee flowchart',{id:'a8'});
+  dec(790,540,120,46,'answer?',{id:'d2'});
+  act(535,519,150,44,'raise PlannerError',{id:'a9'});
+  act(195,519,150,44,'show_notice()\nphase = idle',{id:'a10'});
+  ffin(270,600);
+  act(535,601,150,52,'reshape rows → dicts\nreasons → English',{id:'a11'});
+  act(890,680,150,52,'replay(explored)\nsearch trace on map',{id:'a12'});
+  act(890,760,150,52,'travel(option 0)\nanimate the plane',{id:'a13'});
+  act(890,836,150,44,'show_plan()\nticket · days · costs',{id:'a14'});
+  act(40,836,130,44,'Pick A / B / C\nor open booking links',{id:'a15'});
+  fin(105,895);
+  edge([[105,98],[105,115]]);edge([[105,159],[105,185]]);edge([[170,205],[195,205]]);
+  edge([[270,225],[270,251]]);
+  edge([[335,275],[375,275]],{lbl:'[yes]',at:[355,267]});
+  edge([[445,299],[445,321]]);edge([[515,347],[535,347]]);edge([[610,373],[610,440]]);
+  edge([[270,299],[270,466],[535,466]],{lbl:'[no] set_live_fares({})',at:[276,420],anc:'start'});
+  edge([[685,466],[715,466]]);edge([[790,492],[790,517]]);
+  edge([[730,540],[685,540]],{lbl:'[no]',at:[708,532]});
+  edge([[535,541],[345,541]]);edge([[270,563],[270,591]]);
+  edge([[790,563],[790,627],[685,627]],{lbl:'[yes]',at:[796,595],anc:'start'});
+  edge([[610,653],[610,706],[890,706]]);
+  edge([[965,732],[965,760]]);edge([[965,812],[965,836]]);
+  edge([[890,858],[170,858]]);edge([[105,880],[105,885]]);
+ }},
+{id:'seq',pkg:'beh',kind:'sd',name:'Search sequence',w:1000,h:700,
+ summary:'The same search as messages between objects over time.',
+ doc:`<p>The sequence makes the timing visible. Fetching fares is optional and happens before the query, so Prolog always reasons over a fixed set of facts. The Prolog call is a single synchronous query: <code>findall</code>, ranking and reasons all run inside it. Everything after it is presentation.</p>`,
+ draw(){
+  const X={t:70,w:230,l:400,a:560,p:720,k:880};
+  life(X.t,'Traveller',48,670,{actor:true,id:'t'});
+  life(X.w,'TangWindow',50,670,{id:'w'});
+  life(X.l,'live_prices',50,670,{id:'l'});
+  life(X.a,'Aviasales API',50,670,{id:'a'});
+  life(X.p,'Planner',50,670,{id:'p'});
+  life(X.k,'trip.pl',50,670,{sub:'SWI-Prolog',id:'k'});
+  bar(X.w,100,650);bar(X.p,130,160);bar(X.l,198,282);bar(X.a,222,246);bar(X.p,298,334);bar(X.k,318,334);bar(X.p,372,530);bar(X.k,396,478);
+  frag(200,175,700,170,'opt','[token or fare cache]');
+  msg(X.t,X.w,100,'search()');
+  msg(X.w,X.p,132,'fare_routes(from, to)');
+  msg(X.p,X.w,156,'outbound, inbound',{ret:true});
+  msg(X.w,X.l,200,'fares_for(out, in, go, back)');
+  msg(X.l,X.a,224,'GET prices_for_dates');
+  msg(X.a,X.l,246,'cheapest fare',{ret:true});
+  msg(X.l,X.w,280,'{fares, offers, status}',{ret:true});
+  msg(X.w,X.p,300,'set_live_fares(fares, offers)');
+  msg(X.p,X.k,322,'clear_live · assertz(live_fare/3)');
+  msg(X.w,X.p,374,'plan(from, to, days, …, options)');
+  msg(X.p,X.k,398,'plan_trip/11 query');
+  self(X.k,420,'findall candidate/8\nrank · reasons/11');
+  msg(X.k,X.p,476,'[Stats, Rows]',{ret:true});
+  self(X.p,490,'reshape → dicts');
+  msg(X.p,X.w,528,'result dict',{ret:true});
+  self(X.w,548,'map.replay(explored)');
+  self(X.w,580,'map.travel(option 0)');
+  self(X.w,612,'results.show_plan()');
+  msg(X.w,X.t,648,'ticket · day plan · costs · reasons',{ret:true});
+ }},
+{id:'states',pkg:'beh',kind:'stm',name:'Window phases',w:820,h:440,
+ summary:'The four phases of TangWindow and what moves it between them.',
+ doc:`<p><code>TangWindow.phase</code> keeps the interface honest. A second search cannot start while one is running. Picking another plan only replays the journey when the search has finished. A new search may start during travelling and stops the ride.</p>`,
+ draw(){
+  init(45,208);
+  state(85,180,140,58,'idle',['form editable'],{id:'idle'});
+  state(330,168,170,82,'searching',['entry / fetch fares','do / Prolog query','do / replay explored edges'],{id:'searching'});
+  state(610,58,170,70,'travelling',['do / animate plane','skip button shown'],{id:'travelling'});
+  state(610,290,170,70,'done',['entry / summary ticker','plans A / B / C clickable'],{id:'done'});
+  edge([[53,208],[85,208]]);
+  edge([[225,198],[330,198]],{lbl:'Find trips',at:[277,189]});
+  edge([[330,226],[225,226]],{lbl:'PlannerError',at:[277,240]});
+  edge([[500,190],[560,190],[560,85],[610,85]],{lbl:'options found\n/ travel(0)',at:[566,135],anc:'start'});
+  edge([[680,128],[680,290]],{lbl:'arrived\n/ skip',at:[674,210],anc:'end'});
+  edge([[730,290],[730,128]],{lbl:'pick_plan(i)',at:[736,210],anc:'start'});
+  edge([[500,232],[560,232],[560,320],[610,320]],{lbl:'no options',at:[566,280],anc:'start'});
+  edge([[650,360],[650,400],[415,400],[415,250]],{lbl:'Find trips',at:[530,392]});
+ }},
+{id:'candidate',pkg:'alg',kind:'act',name:'Generate and test a candidate',w:820,h:800,
+ summary:'candidate/8: how one plan is generated, tested, and how failure backtracks into the next choice.',
+ doc:`<p><code>candidate/8</code> is generate-and-test (Clocksin &amp; Mellish ch. 4). Each <code>member/2</code> and each clause of <code>round_tour/4</code> leaves a choice point. When a test fails, Prolog backtracks to the most recent choice and tries the next alternative. <code>findall/3</code> in <code>plan_trip</code> forces this to happen until every combination has been tried.</p>
+ <p>Flight searches are memoised in <code>flight_memo/4</code>, so revisiting the same arrival city costs nothing. Tours allow at most 4 cities and may loop back to the arrival city so the traveller can fly home from it.</p>`,
+ draw(){
+  init(260,48);
+  act(120,72,280,44,'choose arrival city\ncity/7 ∧ airport/2 in Country',{id:'c1'});
+  act(120,140,280,44,'best_flights(Home → Arrive)\nbest-first, 2 routes, memoised',{id:'c2'});
+  act(120,208,280,40,'member(Out, Outs)',{id:'c3'});
+  act(120,272,280,44,'round_tour(Arrive, 4, Cities, Moves)\ntrail DFS over ground/5',{id:'c4'});
+  dec(260,370,190,56,'chosen_ok?\n(traveller\'s own cities)',{id:'cd1'});
+  act(120,430,280,44,'last city has an airport\nbest_flights(Last → Home)',{id:'c5'});
+  act(120,498,280,40,'member(Ret, Rets)',{id:'c6'});
+  act(120,562,280,44,'build_plan\ndays · activities · costs · meta',{id:'c7',doc:'See “Share days and cost a plan”.'});
+  dec(260,645,200,56,'enough days for every\ncity\'s minimum stay?',{id:'cd2'});
+  act(120,700,280,40,'attach_moves → Plan',{id:'c8'});
+  fin(260,768);
+  edge([[260,56],[260,72]]);edge([[260,116],[260,140]]);edge([[260,184],[260,208]]);edge([[260,248],[260,272]]);
+  edge([[260,316],[260,342]]);
+  edge([[260,398],[260,430]],{lbl:'[yes]',at:[266,414],anc:'start'});
+  edge([[260,474],[260,498]]);edge([[260,538],[260,562]]);edge([[260,606],[260,617]]);
+  edge([[260,673],[260,700]],{lbl:'[yes]',at:[266,686],anc:'start'});
+  edge([[260,740],[260,758]]);
+  edge([[355,370],[470,370],[470,294],[400,294]],{lbl:'[no] backtrack:\nnext tour',at:[476,338],anc:'start'});
+  edge([[360,645],[570,645],[570,228],[400,228]],{lbl:'[no] backtrack:\nnext Out / Ret / tour',at:[576,440],anc:'start'});
+  note(600,72,200,118,'Generate and test (ch. 4)\nEvery member/2 and every\nround_tour clause is a choice\npoint. findall/3 in plan_trip\nmakes Prolog fail back into\nthem until all are tried.',{id:'cn'});
+  edge([[600,130],[400,160]],{dash:true,end:'none'});
+ }},
+{id:'bestfirst',pkg:'alg',kind:'act',name:'Best-first flight search',w:860,h:740,
+ summary:'best_routes/5: the book\'s go3 best-first search over flights, with time-zone-aware connections.',
+ doc:`<p>The search keeps a queue of partial routes <code>r(Cost, Here, Clock, Visited, Legs)</code> and always extends the cheapest one first (<code>shortest/3</code>). Every cost only grows as a route gets longer, so the first complete route taken off the queue is the best. The search stops after the best two.</p>
+ <p>A next flight is legal only if it doesn't revisit a city, doesn't route back through Thailand on the way out, matches the airline and night-flight options, and leaves at least 90 minutes and at most 12 hours after landing. The times are compared in UTC. <code>compare_search/5</code> shows that this does far fewer steps than the depth-first <code>fly/3</code>, which must find and sort every route.</p>`,
+ draw(){
+  init(280,45);
+  act(140,68,280,40,'Queue = [r(0, From, start, [From], [])]',{id:'b1'});
+  dec(280,165,170,56,'K = 0 or\nqueue empty?',{id:'bd0'});
+  fin(70,262);
+  act(140,222,280,44,'shortest/3\ntake the cheapest partial route',{id:'b2'});
+  dec(280,320,180,56,'Here = To and\nLegs ≠ [] ?',{id:'bd1'});
+  act(520,295,240,50,'emit route (rev Legs)\nK := K − 1',{id:'b3'});
+  dec(280,412,200,56,'flights so far\n< max_flights?',{id:'bd2'});
+  act(520,387,240,50,'drop this route\ntoo many flights',{id:'b7'});
+  act(140,470,280,66,'findall legal next flights\nnot visited · no return to Thailand\nairline_ok · daytime_ok\nwait 90 min – 12 h (UTC)',{id:'b4',doc:'departure/5 converts local times with to_utc/3 and enforces the connection window.'});
+  act(140,560,280,44,'flight_price (live or season)\npath_cost(Pref) · note_explored',{id:'b5'});
+  act(140,630,280,40,'Queue := Longer ++ Rest',{id:'b6'});
+  edge([[280,53],[280,68]]);edge([[280,108],[280,137]]);
+  edge([[195,165],[70,165],[70,252]],{lbl:'[yes] return Routes',at:[132,157]});
+  edge([[280,193],[280,222]],{lbl:'[no]',at:[286,207],anc:'start'});
+  edge([[280,266],[280,292]]);
+  edge([[370,320],[520,320]],{lbl:'[yes]',at:[445,312]});
+  edge([[280,348],[280,384]],{lbl:'[no]',at:[286,366],anc:'start'});
+  edge([[380,412],[520,412]],{lbl:'[no]',at:[450,404]});
+  edge([[280,440],[280,470]],{lbl:'[yes]',at:[286,455],anc:'start'});
+  edge([[280,536],[280,560]]);edge([[280,604],[280,630]]);
+  edge([[760,320],[800,320],[800,165],[365,165]],{lbl:'next',at:[806,240],anc:'start'});
+  edge([[760,412],[800,412],[800,320]],{end:'none'});
+  edge([[420,650],[800,650],[800,412]],{end:'none'});
+  note(450,470,320,92,'Why the first answer is the best\nCost only grows as a route gets longer,\nso the first complete route taken off the\nqueue is the cheapest (book §7.9, go3).\nbest_flights/4 memoises with assertz.',{id:'bn'});
+ }},
+{id:'days',pkg:'alg',kind:'act',name:'Share days and cost a plan',w:860,h:880,
+ summary:'build_plan/11 and share_days/4: landing day, minimum stays, spare days, activities and the cost breakdown.',
+ doc:`<p>The landing day comes from the last outbound leg in the destination's local time, so an overnight flight lands on day 2. The remaining city days are shared out. Each city first gets its minimum stay from <code>stay_range/3</code>, moved by one day for a packed or relaxed pace. Every spare day then goes to the city with the most room left. A tour that cannot give each city its minimum fails, and Prolog backtracks to another tour.</p>
+ <p>Each day gets up to three activities that fit its free hours, liked categories first. Costs are flights and ground transport times people; hotel nights times rooms (two people per room), minus nights spent on night buses, trains or ferries; daily spend; and entry fees.</p>`,
+ draw(){
+  init(250,45);
+  act(110,66,280,44,'local_time(last outbound leg)\nLanded = landing day',{id:'s1'});
+  act(110,132,280,40,'CityDays = Days − Landed',{id:'s2'});
+  dec(250,225,150,50,'CityDays ≥ 1?',{id:'sd1'});
+  ffin(575,225);
+  act(110,280,280,50,'starts/4: each city gets its minimum\nstay_range/3, ± 1 for pace',{id:'s3'});
+  act(110,352,280,40,'Spare = CityDays − Σ minimums',{id:'s4'});
+  dec(250,440,150,50,'Spare ≥ 0?',{id:'sd2'});
+  ffin(575,440);
+  dec(250,497,24,24,'',{id:'m1',type:'Merge'});
+  dec(250,562,140,50,'Spare > 0?',{id:'sd3'});
+  act(470,537,260,50,'roomiest/5\n+1 day to the city with most room',{id:'s5'});
+  act(110,620,280,50,'city_days/8 · pick/6\n≤ 3 activities a day, liked first',{id:'s6'});
+  act(110,694,280,50,'costs: flights · ground · hotels\n− on-board nights · daily · fees',{id:'s7'});
+  act(110,768,280,44,'meta: rooms · nights · minutes\nenjoyment · free days',{id:'s8'});
+  fin(250,846);
+  edge([[250,53],[250,66]]);edge([[250,110],[250,132]]);edge([[250,172],[250,200]]);
+  edge([[325,225],[566,225]],{lbl:'[no] fail → backtrack',at:[445,217]});
+  edge([[250,250],[250,280]],{lbl:'[yes]',at:[256,265],anc:'start'});
+  edge([[250,330],[250,352]]);edge([[250,392],[250,415]]);
+  edge([[325,440],[566,440]],{lbl:'[no] tour too big',at:[445,432]});
+  edge([[250,465],[250,485]],{lbl:'[yes]',at:[256,474],anc:'start'});
+  edge([[250,509],[250,537]]);
+  edge([[320,562],[470,562]],{lbl:'[yes]',at:[395,554]});
+  edge([[600,537],[600,497],[262,497]]);
+  edge([[250,587],[250,620]],{lbl:'[no]',at:[256,603],anc:'start'});
+  edge([[250,670],[250,694]]);edge([[250,744],[250,768]]);edge([[250,812],[250,836]]);
+  note(560,300,250,74,'If every city is at its maximum,\none extra day goes to the biggest\ncity; more than one fails the tour.',{id:'sn1'});
+  edge([[680,374],[680,537]],{dash:true,end:'none'});
+  note(470,640,340,92,'Free hours\narrival day: landing + 1 h → 21:00 (max 8)\nleaving day: 09:00 → take-off − 3 h (max 6)\nmove day: 8 − hours on the road\novernight ride: 7 h and no hotel that night',{id:'sn2'});
+  edge([[390,645],[470,665]],{dash:true,end:'none'});
+ }}
+];
+
+/* render each diagram once to string */
+D.forEach(d=>{S=[];E=[];d.draw();d.els=E;const [k]=KIND[d.kind];
+  d.svg=`<svg class="dg" viewBox="0 0 ${d.w} ${d.h}" width="${d.w}" height="${d.h}" role="img" aria-label="${esc(d.name)}"><rect x="0" y="0" width="${d.w}" height="${d.h}" fill="none"/>${frame(k,d.name,d.w,d.h)}${S.join('')}</svg>`});
+
+/* ---------- app shell ---------- */
+const $=s=>document.querySelector(s);
+const icon=k=>{const c={req:'var(--el-line)',uc:'var(--el-line)',custom:'var(--el3-line)',cmp:'var(--el2-line)',class:'var(--el2-line)',analysis:'var(--el-line)',act:'var(--el-line)',sd:'var(--el2-line)',stm:'var(--el3-line)'}[k];
+  return `<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" fill="var(--paper)" stroke="${c}"/><rect x="3.5" y="4.5" width="4" height="3" fill="${c}"/><rect x="8.5" y="8.5" width="4" height="3" fill="${c}"/><path d="M5.5 7.5v2.5h3" stroke="${c}" fill="none"/></svg>`};
+const FOLDER='<svg viewBox="0 0 16 16"><path d="M1.5 4h5l1.5 1.5h6.5v8h-13z" fill="var(--note)" stroke="var(--note-line)"/></svg>';
+const DOCI='<svg viewBox="0 0 16 16"><path d="M3 1.5h7l3 3v10H3z" fill="var(--paper)" stroke="var(--ink-2)"/><path d="M5 7h6M5 9.5h6M5 12h4" stroke="var(--accent)"/></svg>';
+const MODELI='<svg viewBox="0 0 16 16"><path d="M8 1.5l6 3.2v6.6L8 14.5l-6-3.2V4.7z" fill="var(--accent-soft)" stroke="var(--accent)"/></svg>';
+
+let cur='report',open=['report'],zoom={},sel=null;
+function treeHTML(){let h=`<li><div class="row" style="cursor:default">${'<span class="tw">▾</span>'}${MODELI}<span class="lbl"><b>Tang Trip Planner</b></span></div><ul>`;
+  h+=`<li><button class="row" data-go="report"><span class="tw"></span>${DOCI}<span class="lbl">Model report</span><span class="kind">doc</span></button></li>`;
+  Object.entries(PKG).forEach(([p,t])=>{h+=`<li><div class="row" style="cursor:default"><span class="tw">▾</span>${FOLDER}<span class="lbl">${esc(t)}</span></div><ul>`;
+    D.filter(d=>d.pkg===p).forEach(d=>h+=`<li><button class="row" data-go="${d.id}"><span class="tw"></span>${icon(d.kind)}<span class="lbl">${esc(d.name)}</span><span class="kind">${KIND[d.kind][0]}</span></button></li>`);
+    h+='</ul></li>'});
+  return h+'</ul></li>'}
+$('#tree').innerHTML=treeHTML();
+$('#tree').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b)go(b.dataset.go)});
+
+const byId=id=>D.find(d=>d.id===id);
+function tabsHTML(){return open.map(id=>{const d=byId(id);const name=d?d.name:'Model report';const ic=d?icon(d.kind):DOCI;
+  return `<div class="dtab${id===cur?' on':''}" role="tab" aria-selected="${id===cur}" tabindex="0" data-tab="${id}"><span style="width:14px;height:14px;display:inline-flex">${ic}</span>${esc(name)}${id!=='report'?`<button class="x" data-close="${id}" aria-label="Close ${esc(name)}">×</button>`:''}</div>`}).join('')}
+$('#dtabs').addEventListener('click',e=>{const x=e.target.closest('[data-close]');if(x){e.stopPropagation();close(x.dataset.close);return}const t=e.target.closest('[data-tab]');if(t)go(t.dataset.tab)});
+$('#dtabs').addEventListener('keydown',e=>{if(e.key==='Enter'){const t=e.target.closest('[data-tab]');if(t)go(t.dataset.tab)}});
+function close(id){open=open.filter(x=>x!==id);if(cur===id)go(open[open.length-1]||'report');else render()}
+
+function reportHTML(){
+  let h=`<div class="report"><article class="page">
+  <h1>Tang (ทาง) Trip Planner</h1>
+  <p class="sub">Agent model report: PEAS description, architecture and behaviour of a Prolog + Python travel-planning agent.</p>
+  <dl class="meta"><dt>Model</dt><dd>TangTripPlanner · Agent Model</dd><dt>Source</dt><dd><code>prolog/trip.pl</code>, <code>backend/</code>, <code>app.py</code>, <code>ui/</code></dd>
+  <dt>Reasoner</dt><dd>SWI-Prolog through pyswip; only constructs taught in Clocksin &amp; Mellish, <i>Programming in Prolog</i></dd>
+  <dt>Notation</dt><dd>UML 2.5 (use case, class, component, activity, sequence, state machine), flowchart, PEAS</dd><dt>Diagrams</dt><dd>${D.length}</dd><dt>Generated</dt><dd>19 November 2026</dd></dl>
+  <h3>Contents</h3><ol class="toc">${D.map(d=>`<li><a href="#${d.id}" data-jump="${d.id}">${esc(d.name)}</a></li>`).join('')}</ol>`;
+  let n=0,last='';
+  D.forEach(d=>{if(d.pkg!==last){last=d.pkg;h+=`<h2>${esc(PKG[d.pkg])}</h2>`}n++;
+    const docs=d.els.filter(e=>e.doc);
+    h+=`<section id="r-${d.id}"><h3>${n}. ${esc(d.name)} <span class="tag">${KIND[d.kind][1]}</span></h3>${d.doc}
+    <div class="fig" data-open="${d.id}" title="Open in diagram view">${d.svg}</div>
+    <div class="cap">Figure ${n}: ${esc(KIND[d.kind][0])} ${esc(d.name)} · <button data-open="${d.id}">open in diagram view</button></div>
+    ${d.extra||''}
+    ${docs.length?`<div class="tbl"><table><thead><tr><th>Element</th><th>Type</th><th>Notes</th></tr></thead><tbody>${docs.map(e=>`<tr><td>${esc(e.name)}</td><td>${esc(e.type)}</td><td>${esc(e.doc)}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`});
+  return h+`<p class="cap" style="margin-top:28px">Prices, timetables and visa rules in the knowledge base are sample data for a class project.</p></article></div>`}
+
+function propsHTML(){
+  if(cur==='report')return `<dl class="props"><dt>Name</dt><dd>Model report</dd><dt>Type</dt><dd>Document</dd><dt>Diagrams</dt><dd>${D.length}</dd><dt>Elements</dt><dd>${D.reduce((a,d)=>a+d.els.length,0)}</dd><dt>Status</dt><dd>Approved</dd></dl>
+    <div class="phead" style="margin-top:6px">Notes</div><div class="notes"><p>Generated document for the whole model. Click a figure or a contents entry to open that diagram.</p></div>`;
+  const d=byId(cur),e=sel&&d.els.find(x=>x.id===sel);
+  const top=e?`<dl class="props"><dt>Name</dt><dd>${esc(e.name)}</dd><dt>Type</dt><dd>${esc(e.type)}</dd><dt>Diagram</dt><dd>${esc(d.name)}</dd><dt>Package</dt><dd>${esc(PKG[d.pkg])}</dd></dl>
+    <div class="phead" style="margin-top:6px">Notes</div><div class="notes"><p>${e.doc?esc(e.doc):'<span style="color:var(--ink-3)">No notes for this element.</span>'}</p></div>`
+   :`<dl class="props"><dt>Name</dt><dd>${esc(d.name)}</dd><dt>Type</dt><dd>${KIND[d.kind][1]}</dd><dt>Package</dt><dd>${esc(PKG[d.pkg])}</dd><dt>Size</dt><dd>${d.w} × ${d.h}</dd><dt>Elements</dt><dd>${d.els.length}</dd><dt>Version</dt><dd>1.0</dd></dl>
+    <div class="phead" style="margin-top:6px">Notes</div><div class="notes">${d.doc}</div>`;
+  return top+`<div class="phead" style="margin-top:6px">Elements in diagram</div><ul class="ellist">${d.els.filter(x=>!/^(e\d+)$/.test(x.id)||x.type!=='Initial Node').map(x=>`<li><button data-sel="${x.id}" class="${x.id===sel?'on':''}">${esc(x.name||'(unnamed)')} <small>${esc(x.type)}</small></button></li>`).join('')}</ul>`}
+$('#props').addEventListener('click',e=>{const b=e.target.closest('[data-sel]');if(b)select(b.dataset.sel===sel?null:b.dataset.sel)});
+
+function render(){
+  $('#dtabs').innerHTML=tabsHTML();
+  document.querySelectorAll('#tree [data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go===cur));
+  const v=$('#view');const d=byId(cur);
+  if(!d){v.innerHTML=reportHTML();$('#tt').textContent='Model report';$('#st-l').textContent=`Model report · ${D.length} diagrams`;$('#st-z').textContent='';}
+  else{v.innerHTML=`<div class="canvas">${d.svg}</div>`;$('#tt').textContent=d.name;applyZoom();}
+  ['#b-zo','#b-z1','#b-zi','#b-fit'].forEach(s=>$(s).disabled=!d);
+  const i=D.indexOf(d);$('#b-prev').disabled=i<=0&&!!d;$('#b-next').disabled=i===D.length-1;
+  drawSel();$('#props').innerHTML=propsHTML();
+}
+function go(id,keepScroll){if(id!=='report'&&!byId(id))id='report';if(!open.includes(id))open.push(id);if(cur!==id){cur=id;sel=null}render();if(!keepScroll)$('#view').scrollTop=0;
+  try{history.replaceState(null,'','#'+id)}catch(_){} }
+function applyZoom(){const d=byId(cur);if(!d)return;const z=zoom[cur]??1;const s=$('#view svg');s.setAttribute('width',Math.round(d.w*z));s.setAttribute('height',Math.round(d.h*z));
+  $('#st-z').textContent=`Zoom ${Math.round(z*100)}%`;$('#st-l').textContent=`${KIND[d.kind][0]} ${d.name} · ${d.els.length} elements · ${PKG[d.pkg]}`}
+function setZoom(z){zoom[cur]=Math.max(.3,Math.min(2.5,z));applyZoom();drawSel()}
+$('#b-zi').onclick=()=>setZoom((zoom[cur]??1)+.15);
+$('#b-zo').onclick=()=>setZoom((zoom[cur]??1)-.15);
+$('#b-z1').onclick=()=>setZoom(1);
+$('#b-fit').onclick=()=>{const d=byId(cur);const v=$('#view');setZoom(Math.min((v.clientWidth-34)/d.w,(v.clientHeight-34)/d.h))};
+$('#b-report').onclick=()=>go('report');
+$('#b-prev').onclick=()=>{const i=D.indexOf(byId(cur));go(D[Math.max(0,i-1)].id)};
+$('#b-next').onclick=()=>{const i=D.indexOf(byId(cur));go(D[Math.min(D.length-1,i+1)].id)};
+
+/* selection with EA-style handles */
+function select(id){sel=id;drawSel();$('#props').innerHTML=propsHTML()}
+function drawSel(){const svg=$('#view svg.dg');if(!svg||!byId(cur))return;svg.querySelectorAll('.selg').forEach(n=>n.remove());if(!sel)return;
+  const g=svg.querySelector(`[data-el="${CSS.escape(sel)}"]`);if(!g)return;const b=g.getBBox(),p=3,x=b.x-p,y=b.y-p,w=b.width+2*p,h=b.height+2*p;
+  const pts=[[x,y],[x+w/2,y],[x+w,y],[x,y+h/2],[x+w,y+h/2],[x,y+h],[x+w/2,y+h],[x+w,y+h]];
+  const NS='http://www.w3.org/2000/svg';const sg=document.createElementNS(NS,'g');sg.setAttribute('class','selg');
+  sg.innerHTML=`<rect class="selbox" x="${x}" y="${y}" width="${w}" height="${h}"/>`+pts.map(([a,c])=>`<rect class="handle" x="${a-3}" y="${c-3}" width="6" height="6"/>`).join('');
+  svg.appendChild(sg);
+  const st=byId(cur).els.find(e=>e.id===sel);if(st)$('#st-l').textContent=`${st.type}: ${st.name}`}
+$('#view').addEventListener('click',e=>{
+  const o=e.target.closest('[data-open]');if(o&&cur==='report'){go(o.dataset.open);return}
+  const j=e.target.closest('[data-jump]');if(j){e.preventDefault();document.getElementById('r-'+j.dataset.jump)?.scrollIntoView({block:'start'});return}
+  if(cur==='report')return;const g=e.target.closest('[data-el]');select(g?g.dataset.el:null)});
+
+const start=(location.hash||'').slice(1);
+if(start&&byId(start)){open.push(start);cur=start}
+render();
+window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h!==cur&&(h==='report'||byId(h)))go(h)});
+</script>

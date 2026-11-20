@@ -1,5 +1,3 @@
-"""The results panel: plan tabs, the ticket, reasons, day-by-day plan and costs."""
-
 from __future__ import annotations
 
 import datetime as dt
@@ -17,8 +15,6 @@ import booking
 from theme import C, MONO, THAI, color
 from widgets import Clickable, clear_layout, eyebrow, hbox, label, vbox
 
-INTEREST = {"food": "FOOD", "culture": "TEMPLES & HISTORY", "nature": "NATURE", "beach": "BEACHES",
-            "shopping": "SHOPPING", "adventure": "ADVENTURE", "nightlife": "NIGHTLIFE"}
 GROUND = {"high_speed": "Bullet train", "train": "Train", "bus": "Bus", "ferry": "Ferry", "plane": "Domestic flight",
           "night_bus": "Night bus", "night_train": "Night train", "night_ferry": "Night ferry"}
 RIDE = {"train": "train", "high_speed": "train", "night_train": "train", "bus": "bus", "night_bus": "bus",
@@ -27,7 +23,7 @@ OVERNIGHT = {"night_bus", "night_train", "night_ferry"}
 
 
 def baht(n: float) -> str:
-    return f"฿{round(n):,}"
+    return f"฿ {round(n):,}"
 
 
 def dur(minutes: int) -> str:
@@ -54,14 +50,13 @@ def span(text: str, col: str = "ink", size: float | None = None, weight: int | N
 
 
 class Swatch(QWidget):
-    """A short coloured bar meaning "this is how you travel"."""
 
     def __init__(self, ride: str, w: int = 16, h: int = 3):
         super().__init__()
         self.ride = ride
         self.setFixedSize(w, h)
 
-    def paintEvent(self, e):  # noqa: N802
+    def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
@@ -70,13 +65,12 @@ class Swatch(QWidget):
 
 
 class Perforation(QWidget):
-    """The dashed tear line of the ticket, with a notch on each side."""
 
     def __init__(self):
         super().__init__()
         self.setFixedHeight(18)
 
-    def paintEvent(self, e):  # noqa: N802
+    def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         pen = QPen(color("rule"), 1.5, Qt.PenStyle.DashLine)
@@ -97,7 +91,7 @@ class DurationLine(QWidget):
         self.setFixedHeight(20)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-    def paintEvent(self, e):  # noqa: N802
+    def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         y = self.height() / 2
@@ -120,7 +114,7 @@ class Meter(QWidget):
         self.fraction, self.over = fraction, over
         self.setFixedHeight(6)
 
-    def paintEvent(self, e):  # noqa: N802
+    def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
@@ -131,13 +125,12 @@ class Meter(QWidget):
 
 
 class DayRail(QWidget):
-    """One day of the itinerary, with the timeline dot and line on its left."""
 
     def __init__(self, kind: str, last: bool):
         super().__init__()
         self.kind, self.last = kind, last
 
-    def paintEvent(self, e):  # noqa: N802
+    def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         if not self.last:
@@ -150,7 +143,6 @@ class DayRail(QWidget):
 
 
 def link(text: str, url: str) -> QLabel:
-    """A link that opens in the web browser."""
     lab = label(f'<a href="{escape(url)}" style="color:{C["ink"]}; font-weight:700;">{escape(text)} ↗</a>', rich=True)
     lab.setOpenExternalLinks(True)
     lab.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
@@ -210,7 +202,6 @@ class ResultsPanel(QWidget):
         self.body.addLayout(self._compare(opts, selected, on_select))
         self.body.addWidget(self._ticket(opt, searched["people"]))
         if full:
-            # two columns: booking and cost | the day-by-day plan
             cols = hbox(28)
             left, right = vbox(24), vbox(0)
             if opt.get("notes"):
@@ -225,11 +216,10 @@ class ResultsPanel(QWidget):
             self.body.addLayout(cols)
 
     def _compare(self, opts: list[dict], selected: int, on_select: Callable[[int], None]) -> QVBoxLayout:
-        """All plans side by side; click a row to ride that plan."""
         box = vbox(4)
         box.addWidget(label("Plans Prolog picked", "sectionTitle"))
         box.addSpacing(4)
-        widths = (22, 0, 70, 52, 84)  # 0 = stretch
+        widths = (22, 0, 70, 52, 84)
         head = hbox(10, (12, 0, 12, 0))
         for text, w in zip(("", "WHERE", "FLYING", "FREE", "TOTAL"), widths):
             lab = label(text, "factKey")
@@ -266,7 +256,6 @@ class ResultsPanel(QWidget):
         return box
 
     def _booking(self, opt: dict, start: dt.date, searched: dict, offers: dict) -> QVBoxLayout:
-        """Links to book: a flight search for each way, a hotel search for each stay."""
         cs = self.cities
         people, rooms = searched["people"], opt["meta"]["rooms"]
         box = vbox(8)
@@ -277,7 +266,8 @@ class ResultsPanel(QWidget):
         arrive = opt["outbound"][-1]["to"]
         leave = opt["inbound"][0]["from"]
         back = booking.day_date(start, len(opt["days"]))
-        for title, frm, to, when in (("Going", home, arrive, start), ("Coming home", leave, home, back)):
+        land = opt["inbound"][-1]["to"]
+        for title, frm, to, when in (("Going", home, arrive, start), ("Coming home", leave, land, back)):
             row = hbox(10)
             text = (span(title.upper(), "ink3", 10.5, family=MONO) + "<br>"
                     + span(f'{cs[frm]["code"]} → {cs[to]["code"]}', "ink", 15, 700, MONO) + "&nbsp;&nbsp;"
@@ -299,7 +289,7 @@ class ResultsPanel(QWidget):
             checkin = booking.day_date(start, stay["first"])
             checkout = booking.day_date(start, stay["first"] + stay["nights"])
             if stay["nights"] == 0:
-                continue  # one day, then straight onto a night bus: no hotel needed
+                continue
             night = opt.get("roomPrice", {}).get(stay["city"])
             row = hbox(10)
             text = (span("HOTEL", "ink3", 10.5, family=MONO) + "<br>"
@@ -342,7 +332,8 @@ class ResultsPanel(QWidget):
                 head.addLayout(col, 1)
                 continue
             align = Qt.AlignmentFlag.AlignLeft if side == "left" else Qt.AlignmentFlag.AlignRight
-            for w in (eyebrow(title), label(home["code"], "ticketCode"), label(home["name"], "muted")):
+            end = home if side == "left" else cs[opt["inbound"][-1]["to"]]
+            for w in (eyebrow(title), label(end["code"], "ticketCode"), label(end["name"], "muted")):
                 w.setAlignment(align)
                 col.addWidget(w)
             head.addLayout(col)
@@ -399,7 +390,6 @@ class ResultsPanel(QWidget):
         return box
 
     def _notes(self, notes: list[dict]) -> QVBoxLayout:
-        """Good to know: visa, season and budget notes only."""
         mark = {"visa_ok": ("✓", "ok"), "visa_too_short": ("!", "danger"), "highlight": ("★", "marigold"),
                 "warning": ("!", "danger"), "over_budget": ("!", "danger"), "gateway": ("i", "ink3")}
         box = vbox(6)
@@ -448,25 +438,58 @@ class ResultsPanel(QWidget):
                 ride.addWidget(label(text, "mono", wrap=True), 1)
                 inner.addLayout(ride)
             if d["activities"]:
-                grid = QGridLayout()
-                grid.setHorizontalSpacing(10)
-                grid.setVerticalSpacing(3)
-                for r, a in enumerate(d["activities"]):
-                    grid.addWidget(label(a["name"], wrap=True), r, 0)
-                    tag = label(span(INTEREST.get(a["category"], a["category"].upper()), "ink3", 10.5, family=MONO), rich=True)
-                    grid.addWidget(tag, r, 1, Qt.AlignmentFlag.AlignRight)
-                    fee = label(span(baht(a["fee"]) if a["fee"] else "Free", "ink2", 12.5, family=MONO), rich=True)
-                    fee.setMinimumWidth(56)
-                    fee.setAlignment(Qt.AlignmentFlag.AlignRight)
-                    grid.addWidget(fee, r, 2)
-                grid.setColumnStretch(0, 1)
-                inner.addLayout(grid)
+                inner.addWidget(self._day_activities(d["activities"]))
             else:
                 text = {"free": "Free day: nothing left on the list here, so wander or rest.",
                         "air": "Overnight in the air.", "fly": "Travel day.", "home": "Travel day."}.get(kind, "Arrive and settle in.")
                 inner.addWidget(label(span(text, "ink3", 13), rich=True))
             rail.setLayout(inner)
             box.addWidget(rail)
+        return box
+
+    @staticmethod
+    def _day_activities(acts: list[dict]) -> QWidget:
+        names = " · ".join(a["name"] for a in acts)
+        total = sum(a["fee"] for a in acts)
+        fees = baht(total) if total else "Free"
+
+        box = QWidget()
+        lay = vbox(4)
+        row = Clickable("daySummary")
+        row.setToolTip("Show each activity's price")
+        line = hbox(10)
+        text = label(span(escape(names), "ink2", 13.5), wrap=True, rich=True)
+        line.addWidget(text, 1)
+        right = label(span(f"{fees}  ▸", "ink2", 12.5, family=MONO), rich=True)
+        right.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        line.addWidget(right, 0, Qt.AlignmentFlag.AlignTop)
+        row.setLayout(line)
+        lay.addWidget(row)
+
+        detail = QWidget()
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(3)
+        for r, a in enumerate(acts):
+            grid.addWidget(label(a["name"], wrap=True), r, 0)
+            fee = label(span(baht(a["fee"]) if a["fee"] else "Free", "ink2", 12.5, family=MONO), rich=True)
+            fee.setMinimumWidth(56)
+            fee.setAlignment(Qt.AlignmentFlag.AlignRight)
+            grid.addWidget(fee, r, 1)
+        grid.setColumnStretch(0, 1)
+        detail.setLayout(grid)
+        detail.hide()
+        lay.addWidget(detail)
+        box.setLayout(lay)
+
+        def toggle() -> None:
+            opening = detail.isHidden()
+            detail.setVisible(opening)
+            text.setText(span(f"{len(acts)} activities" if opening else escape(names), "ink2", 13.5))
+            right.setText(span(f"{fees}  {'▾' if opening else '▸'}", "ink2", 12.5, family=MONO))
+
+        row.clicked.connect(toggle)
         return box
 
     def _costs(self, opt: dict, budget: int, people: int) -> QVBoxLayout:

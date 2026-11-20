@@ -1,9 +1,3 @@
-"""Map projection shared by the map builder and the planner.
-
-A simple equirectangular projection for East and Southeast Asia:
-1 degree of latitude = 2 map units, longitude shrunk by cos(17°).
-"""
-
 import math
 
 LON_MIN, LON_MAX = 89.0, 147.0

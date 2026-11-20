@@ -1,15 +1,4 @@
-"""Tang (ทาง) — Asia trip planner. A desktop app in Python (PySide6 / Qt)
-on top of Prolog (pyswip).
-
-Run:  .venv/bin/python app.py
-
-The window only collects the traveller's choices and draws Prolog's answer.
-Every decision — flights, cities, days, costs, reasons — comes from
-prolog/trip.pl through backend/planner.py.
-"""
-
 from __future__ import annotations
-
 import datetime as dt
 import sys
 from pathlib import Path
@@ -18,27 +7,27 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "ui"))
 
-from concurrent.futures import Future, ThreadPoolExecutor  # noqa: E402
-
-from PySide6.QtCore import Qt, QTimer  # noqa: E402
-from PySide6.QtWidgets import (  # noqa: E402
-    QApplication, QFrame, QGridLayout, QHBoxLayout, QMainWindow, QPushButton, QScrollArea, QSlider, QWidget,
+from concurrent.futures import Future, ThreadPoolExecutor
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (
+    QApplication, QFrame, QGridLayout, QMainWindow, QPushButton, QScrollArea, QSlider, QStackedWidget, QWidget,
 )
-
-import theme  # noqa: E402
-from map_view import MapView  # noqa: E402
-import live_prices  # noqa: E402
-from planner import PlannerError, get_planner  # noqa: E402
-from results import ResultsPanel, baht, plural, span  # noqa: E402
-from theme import C, MONO, THAI  # noqa: E402
-from widgets import (  # noqa: E402
+import theme
+from map_view import MapView
+import live_prices
+from planner import PlannerError, get_planner
+from results import ResultsPanel, baht, plural, span
+from theme import C, MONO, THAI
+from widgets import (
     Chip, DatePicker, FlowLayout, Segmented, StationCard, Stepper, chips_box, eyebrow, field, hbox, label, vbox,
 )
 
-HOMES = [("bangkok", "BKK\nBangkok"), ("chiang_mai", "CNX\nChiang Mai"), ("phuket", "HKT\nPhuket")]
+HOMES = [("bangkok", "BKK\nSuvarnabhumi"), ("don_mueang", "DMK\nDon Mueang"),
+         ("chiang_mai", "CNX\nChiang Mai"), ("phuket", "HKT\nPhuket")]
 INTERESTS = [("food", "Food"), ("culture", "Temples && history"), ("nature", "Nature"), ("beach", "Beaches"),
              ("shopping", "Shopping"), ("adventure", "Adventure"), ("nightlife", "Nightlife")]
-PACES = [("relaxed", "Relaxed\n3+ days a city"), ("normal", "Normal\n2+ days a city"), ("packed", "Packed\n1+ day a city")]
+PACES = [("relaxed", "Relaxed\nfewer cities,\nlonger stays"), ("normal", "Normal\nthe usual stay"),
+         ("packed", "Packed\nmore cities,\nshorter stays")]
 PREFS = [("cheapest", "Cheapest"), ("fastest", "Least flying"), ("fewest", "Fewest flights"), ("balanced", "Balanced")]
 STOPS = [("1", "Direct only"), ("2", "1 change"), ("3", "2 changes")]
 AIRLINES = [("any", "Any"), ("budget", "Budget only"), ("full", "Full-service")]
@@ -72,7 +61,7 @@ class TangWindow(QMainWindow):
                      "people": 2, "budget": 90000, "max_flights": 3, "airlines": "any", "night_flights": "allowed",
                      "hotel": "mid", "cities": [], "getting_around": "any",
                      "interests": ["food", "culture"], "pace": "normal", "pref": "cheapest"}
-        self.phase = "idle"          # idle | searching | travelling | done
+        self.phase = "idle"
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.fare_status = "off"
         self.offers: dict = {}
@@ -91,18 +80,35 @@ class TangWindow(QMainWindow):
         self.setCentralWidget(root)
         outer.addWidget(self._masthead())
 
-        body = QHBoxLayout()
-        body.setSpacing(0)
-        body.setContentsMargins(0, 0, 0, 0)
-        outer.addLayout(body, 1)
+        self.pages = QStackedWidget()
+        outer.addWidget(self.pages, 1)
 
-        # search form | the plan (wide) | the map (narrow, can be expanded)
-        self.form_panel = self._scroll(self._form(), "formPanel", 340)
+        self.map_frame = QFrame()
+        self.map_frame.setObjectName("mapFrame")
+        fl = vbox(0, (1, 1, 1, 1))
+        self.map = MapView(self.data)
+        fl.addWidget(self.map)
+        self.map_frame.setLayout(fl)
+
+        search_page = QWidget()
+        body = hbox(0)
+        search_page.setLayout(body)
+        self.form_panel = self._scroll(self._form(), "formPanel", 400)
         body.addWidget(self.form_panel)
+        self.search_map = vbox(10, (16, 14, 16, 16))
+        self.search_map.addWidget(label(span("Click a country on the map to go there.", "ink2", 13), rich=True))
+        body.addLayout(self.search_map, 1)
+        self.pages.addWidget(search_page)
+
+        results_page = QWidget()
+        body = hbox(0)
+        results_page.setLayout(body)
         self.results = ResultsPanel(self.cities, self.countries)
         body.addWidget(self._plan_column(), 1)
         self.map_column = self._map_column()
         body.addWidget(self.map_column)
+        self.pages.addWidget(results_page)
+        self.show_page(0)
 
         self.map.country_picked.connect(lambda c: self.update_form(to=c))
         self.map.set_focus(self.form["to"])
@@ -111,7 +117,7 @@ class TangWindow(QMainWindow):
                                   "Prolog searches every flight connection, plans the cities and days, and explains "
                                   "why it picked each trip.")
 
-    # ------------------------------------------------------------ layout
+    #layout
 
     def _scroll(self, inner: QWidget, name: str, width: int) -> QScrollArea:
         area = QScrollArea()
@@ -126,8 +132,7 @@ class TangWindow(QMainWindow):
         bar = QFrame()
         bar.setObjectName("masthead")
         lay = hbox(10, (24, 12, 24, 12))
-        lay.addWidget(label(span("ทาง", "ink", 28, 700, THAI) + "&nbsp;&nbsp;" + span("tang", "ink", 22, 800)
-                            + "&nbsp;&nbsp;&nbsp;" + span("Asia trip planner from Thailand · reasoning in Prolog", "ink2", 13),
+        lay.addWidget(label(span("ทาง", "ink", 28, 700, THAI) + "&nbsp;&nbsp;" + span("tang", "ink", 22, 800),
                             rich=True))
         lay.addStretch()
         for ride, text in (("air", "Flight"), ("train", "Train"), ("bus", "Bus"), ("ferry", "Ferry")):
@@ -146,12 +151,15 @@ class TangWindow(QMainWindow):
         return bar
 
     def _plan_column(self) -> QWidget:
-        """Status bar on top, then the plan."""
         self.plan_column = QWidget()
         col = vbox(0, (0, 0, 0, 0))
         ticker = QFrame()
         ticker.setObjectName("ticker")
         tl = hbox(10, (14, 8, 10, 8))
+        self.back_btn = QPushButton("←  New search")
+        self.back_btn.setObjectName("back")
+        self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.back_btn.clicked.connect(self.go_back)
         self.lamp = QFrame()
         self.lamp.setFixedSize(8, 8)
         self.ticker = label("", "tickerText", rich=True)
@@ -164,8 +172,9 @@ class TangWindow(QMainWindow):
         tl.addWidget(self.ticker, 1)
         tl.addWidget(self.skip_btn)
         ticker.setLayout(tl)
-        wrap = vbox(0, (20, 14, 20, 0))
-        wrap.addWidget(ticker)
+        wrap = hbox(10, (20, 14, 20, 0))
+        wrap.addWidget(self.back_btn)
+        wrap.addWidget(ticker, 1)
         col.addLayout(wrap)
         self.results_panel = QScrollArea()
         self.results_panel.setObjectName("resultsPanel")
@@ -178,17 +187,10 @@ class TangWindow(QMainWindow):
         return self.plan_column
 
     def _map_column(self) -> QWidget:
-        """The map, small beside the plan; Expand swaps it for the plan."""
         w = QFrame()
         w.setObjectName("mapColumn")
         col = vbox(10, (12, 14, 16, 16))
-        frame = QFrame()
-        frame.setObjectName("mapFrame")
-        fl = vbox(0, (1, 1, 1, 1))
-        self.map = MapView(self.data)
-        fl.addWidget(self.map)
-        frame.setLayout(fl)
-        col.addWidget(frame, 1)
+        self.results_map = col
         self.expand_btn = QPushButton("Expand map  ⤢")
         self.expand_btn.setObjectName("expand")
         self.expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -199,8 +201,25 @@ class TangWindow(QMainWindow):
         self.map_expanded = False
         return w
 
+    def show_page(self, page: int) -> None:
+        if page == 0:
+            self.search_map.addWidget(self.map_frame, 1)
+        else:
+            self.results_map.insertWidget(0, self.map_frame, 1)
+        self.pages.setCurrentIndex(page)
+
+    def go_back(self) -> None:
+        if self.phase == "searching":
+            return
+        if self.map_expanded:
+            self.toggle_map()
+        self.map.skip()
+        self.map.clear()
+        self.show_page(0)
+        self.map.set_focus(self.form["to"])
+        QTimer.singleShot(0, self.map.show_asia)
+
     def toggle_map(self) -> None:
-        """Big map with the day cards, or back to the plan."""
         self.map_expanded = not self.map_expanded
         self.plan_column.setVisible(not self.map_expanded)
         if self.map_expanded:
@@ -211,14 +230,14 @@ class TangWindow(QMainWindow):
             self.map_column.setFixedWidth(440)
             self.expand_btn.setText("Expand map  ⤢")
         self.map.show_cards = self.map_expanded
-        QTimer.singleShot(0, self.map.refit)  # after the layout has resized the map
+        QTimer.singleShot(0, self.map.refit)
 
     def _form(self) -> QWidget:
         w = QWidget()
         lay = vbox(20, (24, 22, 24, 24))
         w.setLayout(lay)
 
-        homes = Segmented(HOMES, self.form["from"])
+        homes = Segmented(HOMES, self.form["from"], columns=2)
         homes.changed.connect(lambda v: self.update_form(**{"from": v}))
         lay.addWidget(field("Fly from", homes))
 
@@ -245,7 +264,7 @@ class TangWindow(QMainWindow):
 
         self.budget_label = label(baht(self.form["budget"]), "budgetValue")
         budget = QSlider(Qt.Orientation.Horizontal)
-        budget.setRange(5, 300)          # thousands of baht
+        budget.setRange(5, 300)
         budget.setValue(self.form["budget"] // 1000)
         budget.valueChanged.connect(lambda v: self.update_form(budget=v * 1000))
         lay.addWidget(field("Budget for everyone", self.budget_label, budget, spacing=6))
@@ -266,7 +285,6 @@ class TangWindow(QMainWindow):
         pref.changed.connect(lambda v: self.update_form(pref=v))
         lay.addWidget(field("Prefer", pref))
 
-        # ---- more detail: each choice becomes a Prolog option (see section 3a of trip.pl)
         stops = Segmented(STOPS, str(self.form["max_flights"]))
         stops.changed.connect(lambda v: self.update_form(max_flights=int(v)))
         night = Chip("Avoid night flights (22:00–06:00)", self.form["night_flights"] == "avoid")
@@ -288,7 +306,7 @@ class TangWindow(QMainWindow):
                                   "hint", wrap=True)))
 
         self.city_box = QWidget()
-        self.city_flow = QGridLayout()   # a fixed grid always takes the height it needs
+        self.city_flow = QGridLayout()
         self.city_flow.setContentsMargins(0, 0, 0, 0)
         self.city_flow.setSpacing(6)
         self.city_box.setLayout(self.city_flow)
@@ -306,7 +324,7 @@ class TangWindow(QMainWindow):
         self.interest_hint.setVisible(not self.form["interests"])
         return w
 
-    # ------------------------------------------------------------ form state
+    #form state
 
     def update_form(self, **changes) -> None:
         if "to" in changes and self.phase in ("searching", "travelling"):
@@ -324,7 +342,6 @@ class TangWindow(QMainWindow):
         self.refresh_query()
 
     def _fill_cities(self) -> None:
-        """One chip per city in the chosen country. Picked cities = exactly where the trip goes."""
         while self.city_flow.count():
             item = self.city_flow.takeAt(0)
             if item.widget():
@@ -340,7 +357,9 @@ class TangWindow(QMainWindow):
             chip = Chip(c["name"], c["id"] in self.form["cities"])
             chip.toggled.connect(lambda on, k=c["id"]: self.update_form(
                 cities=[m for m in self.form["cities"] if m != k] + ([k] if on else [])))
+            chip.ensurePolished()
             self.city_flow.addWidget(chip, i // 2, i % 2)
+        self.city_flow.invalidate()
         self.city_box.updateGeometry()
 
     def toggle_interest(self, key: str, on: bool) -> None:
@@ -373,13 +392,15 @@ class TangWindow(QMainWindow):
         lamp = {"searching": "marigold", "travelling": "marigold", "done": "ok", "off": "danger"}.get(state, "ink3")
         self.lamp.setStyleSheet(f"background:{C[lamp]}; border-radius:4px;")
 
-    # ------------------------------------------------------------ search and journey
+    #search and journey
 
     def search(self) -> None:
         if self.phase == "searching":
             return
         self.map.clear()
+        self.show_page(1)
         self.phase = "searching"
+        self.back_btn.setEnabled(False)
         self.searched = dict(self.form)
         self.offers = {}
         self.selected = 0
@@ -389,8 +410,6 @@ class TangWindow(QMainWindow):
         self.set_ticker(span("Querying", "marigold", weight=600) + " · consulting trip.pl", "searching")
         self.results.show_message("Searching", "Prolog is trying every flight and connection and backtracking out "
                                   "of dead ends. Watch the map.")
-        # Real fares are fetched in the background (the window stays responsive),
-        # then handed to Prolog as facts before it plans.
         f = self.form
         self.fare_status = "off"
         if live_prices.token() or live_prices.CACHE.exists():
@@ -453,14 +472,13 @@ class TangWindow(QMainWindow):
             self.results.show_notice(self.result["empty_reason"] or "No trip found. Try more days or a bigger budget.")
 
     def pick_plan(self, index: int) -> None:
-        """A plan tab was clicked: ride that plan (not while a search is running)."""
         if self.phase != "searching":
             self.travel(index)
 
     def travel(self, index: int) -> None:
         self.selected = index
         self.phase = "travelling"
-        self._ready()  # a new search may start at any time; it stops this ride
+        self._ready()
         self.skip_btn.show()
         opt = self.result["options"][index]
         self.results.show_plan(self.result, index, False, self.searched, self.pick_plan, self.offers)
@@ -485,6 +503,7 @@ class TangWindow(QMainWindow):
                         f' · {s["steps"]:,} steps · {FARES.get(self.fare_status, "sample fares")}', "done")
 
     def _ready(self) -> None:
+        self.back_btn.setEnabled(True)
         self.go.setEnabled(True)
         self.go.setText("Find trips                                      →")
 

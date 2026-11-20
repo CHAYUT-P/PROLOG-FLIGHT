@@ -1,22 +1,3 @@
-"""Real flight prices from the Aviasales Data API (Travelpayouts).
-
-Python only *fetches*. The prices are handed to Prolog as facts —
-live_fare(From, To, PriceTHB) — and Prolog decides how to use them
-(see flight_price/4 in prolog/trip.pl).
-
-Needs a free token from travelpayouts.com, kept in a file called `.env`
-in the project folder:
-
-    TRAVELPAYOUTS_TOKEN=your-token-here
-
-Without a token nothing is fetched and Prolog uses its sample prices,
-adjusted for the month. Every fare fetched is saved in cache/fares.json, so
-a demo still works without internet.
-
-The API returns the cheapest fares Aviasales users found in the last
-48 hours, so some routes or months may have no data.
-"""
-
 from __future__ import annotations
 
 import datetime as dt
@@ -32,9 +13,8 @@ CACHE = ROOT / "cache" / "fares.json"
 API = "https://api.travelpayouts.com/aviasales/v3/prices_for_dates"
 FRESH_HOURS = 24
 
-# Aviasales uses city codes (TYO covers Haneda and Narita).
 CITY_CODE = {
-    "bangkok": "BKK", "chiang_mai": "CNX", "phuket": "HKT",
+    "bangkok": "BKK", "don_mueang": "DMK", "chiang_mai": "CNX", "phuket": "HKT",
     "tokyo": "TYO", "osaka": "OSA", "sapporo": "SPK",
     "seoul": "SEL", "busan": "PUS",
     "shanghai": "SHA", "beijing": "BJS", "xian": "SIA",
@@ -43,7 +23,6 @@ CITY_CODE = {
 
 
 def token() -> str | None:
-    """Read TRAVELPAYOUTS_TOKEN from the environment or from the .env file."""
     if os.environ.get("TRAVELPAYOUTS_TOKEN"):
         return os.environ["TRAVELPAYOUTS_TOKEN"].strip()
     env = ROOT / ".env"
@@ -56,7 +35,6 @@ def token() -> str | None:
 
 
 def travel_month(month: int, today: dt.date | None = None) -> str:
-    """The next time this month comes round, as YYYY-MM (this month counts)."""
     today = today or dt.date.today()
     year = today.year if month >= today.month else today.year + 1
     return f"{year}-{month:02d}"
@@ -87,15 +65,14 @@ def _fetch_one(key: str, origin: str, dest: str, month: str, tok: str) -> tuple[
         return key, None
     offers = [x for x in body.get("data", []) if x.get("price")]
     if not offers:
-        return key, {"price": -1}  # asked, but no fare on record
+        return key, {"price": -1}
     best = min(offers, key=lambda x: x["price"])
-    when = best.get("departure_at", "")  # e.g. 2026-11-11T09:35:00+07:00
+    when = best.get("departure_at", "")
     return key, {"price": int(best["price"]), "date": when[:10], "time": when[11:16],
                  "airline": best.get("airline", ""), "flight": str(best.get("flight_number", ""))}
 
 
 def _refresh(keys: list[str], cache: dict, tok: str | None) -> bool:
-    """Fetch every key that is not in the cache (or is older than a day). Returns True if any answer came back."""
     now = dt.datetime.now()
 
     def fresh(key: str) -> bool:
@@ -106,7 +83,6 @@ def _refresh(keys: list[str], cache: dict, tok: str | None) -> bool:
     if not tok or not todo:
         return False
     with ThreadPoolExecutor(max_workers=8) as pool:
-        # key = ORIGIN-DEST-WHEN, where WHEN is YYYY-MM-DD or YYYY-MM
         results = list(pool.map(lambda k: _fetch_one(k, k[:3], k[4:7], k[8:], tok), todo))
     got = False
     for key, offer in results:
@@ -120,17 +96,9 @@ def _refresh(keys: list[str], cache: dict, tok: str | None) -> bool:
 
 def fares_for(outbound: list[tuple[str, str]], inbound: list[tuple[str, str]],
               go: dt.date, back: dt.date) -> dict:
-    """Live fares for flights leaving on `go` and coming home on `back`.
-
-    For each route we ask for that exact day first. If nobody has searched
-    that day recently, we fall back to the cheapest fare that month and say so.
-
-    Returns {"status": "live" | "cache" | "off", "fares": {(from, to): price},
-             "offers": {(from, to): details, including "exact": True/False}}.
-    """
     tok = token()
     cache = _load_cache()
-    jobs = []  # (pair, day key, month key)
+    jobs = []
     for pairs, when in ((outbound, go), (inbound, back)):
         for a, b in pairs:
             if a in CITY_CODE and b in CITY_CODE:
@@ -157,7 +125,6 @@ def fares_for(outbound: list[tuple[str, str]], inbound: list[tuple[str, str]],
 
 
 def marker() -> str | None:
-    """Optional Travelpayouts partner ID (TRAVELPAYOUTS_MARKER in .env) to add to booking links."""
     if os.environ.get("TRAVELPAYOUTS_MARKER"):
         return os.environ["TRAVELPAYOUTS_MARKER"].strip()
     env = ROOT / ".env"

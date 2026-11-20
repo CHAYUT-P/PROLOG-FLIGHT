@@ -1,11 +1,3 @@
-"""Python <-> Prolog bridge (pyswip).
-
-The app (app.py) uses this module. It never decides anything itself:
-it builds a Prolog query, runs it, and reshapes the nested lists Prolog
-returns into dictionaries. It also turns Prolog's reason lists into English
-and clock minutes into "22:45" — presentation only.
-"""
-
 from __future__ import annotations
 
 import json
@@ -19,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 KB_PATH = ROOT / "prolog" / "trip.pl"
 MAP_PATH = ROOT / "shared" / "asia_map.json"
 
-HOMES = ["bangkok", "chiang_mai", "phuket"]
+HOMES = ["bangkok", "don_mueang", "chiang_mai", "phuket"]
 INTERESTS = ["nature", "culture", "food", "shopping", "beach", "adventure", "nightlife"]
 PACES = ["relaxed", "normal", "packed"]
 PREFERENCES = ["cheapest", "fastest", "fewest", "balanced"]
@@ -37,11 +29,11 @@ IMPORTANT = ("visa_ok", "visa_too_short", "highlight", "warning", "over_budget",
 
 
 class PlannerError(ValueError):
-    """Raised when the request contains something Prolog does not know."""
+    pass
 
 
 def baht(n: int) -> str:
-    return f"฿{n:,}"
+    return f"฿ {n:,}"
 
 
 def duration(minutes: int) -> str:
@@ -57,7 +49,6 @@ class Planner:
         self.cities = {c["id"]: c for c in self._map["cities"]}
         self.countries = {c["id"]: c for c in self._map["countries"]}
 
-    # -- queries -----------------------------------------------------------
 
     def _one(self, query: str) -> dict | None:
         results = list(self.prolog.query(query, maxresult=1))
@@ -71,7 +62,7 @@ class Planner:
         ]
         cities = []
         for c in res["Cities"]:
-            x, y = project(c[5], c[6])  # Prolog stores real latitude/longitude
+            x, y = project(c[5], c[6])
             cities.append({
                 "id": c[0], "name": c[1], "thai": c[2], "code": c[3], "country": c[4],
                 "lat": c[5], "lon": c[6], "x": x, "y": y, "zone": None if c[7] == "none" else c[7],
@@ -93,26 +84,19 @@ class Planner:
         return self._map
 
     def fare_routes(self, origin: str, destination: str) -> tuple[list, list]:
-        """Flight routes worth asking the live-price API about: those that start
-        or end at home (or Bangkok, where Chiang Mai and Phuket connect).
-        Returns (outbound, inbound): flown on the way out and on the way home."""
         countries = ({c for c in self.countries if c != "thailand"} if destination == "anywhere" else {destination})
         targets = {c["id"] for c in self._map["cities"] if c["country"] in countries}
-        ends = {origin, "bangkok"}
+        ends = {origin, "bangkok", "don_mueang"}
         pairs = set()
         for f in self._map["flights"]:
             a, b = f["from"], f["to"]
-            if (a in ends and b in targets) or (b in ends and a in targets) or {a, b} == {origin, "bangkok"}:
+            if (a in ends and b in targets) or (b in ends and a in targets) or (origin in (a, b) and {a, b} <= ends):
                 pairs.add((a, b))
-        outbound = sorted(p for p in pairs if p[0] == origin or (p[0] == "bangkok" and p[1] in targets))
+        outbound = sorted(p for p in pairs if p[0] == origin or (p[0] in ends and p[1] in targets))
         inbound = sorted(p for p in pairs if p not in outbound)
         return outbound, inbound
 
     def set_live_fares(self, fares: dict[tuple[str, str], int], offers: dict | None = None) -> None:
-        """Hand real fares to Prolog as facts: live_fare(From, To, PriceTHB).
-        When the API's cheapest flight on that exact day is one of our flights
-        (same code, same route), also give Prolog its real departure time:
-        live_departure(Code, HHMM)."""
         list(self.prolog.query("clear_live"))
         for (a, b), price in fares.items():
             if a in self.cities and b in self.cities:
@@ -126,10 +110,8 @@ class Planner:
 
     def plan(self, origin, destination, days, month, people, budget, interests, pace, preference,
              options: dict | None = None) -> dict:
-        # Only known atoms go into the query string, so user input can never
-        # change what Prolog is asked.
         if origin not in HOMES:
-            raise PlannerError("Start from Bangkok, Chiang Mai or Phuket.")
+            raise PlannerError("Start from Bangkok (BKK or DMK), Chiang Mai or Phuket.")
         if destination != "anywhere" and (destination not in self.countries or destination == "thailand"):
             raise PlannerError("Unknown destination.")
         if any(i not in INTERESTS for i in interests):
@@ -166,8 +148,6 @@ class Planner:
         }
 
     def option_terms(self, options: dict, destination: str) -> list[str]:
-        """The traveller's extra choices as Prolog terms, e.g. hotel(luxury).
-        Only known values are let through, so input can't change the query."""
         terms = []
         if options.get("max_flights") in (1, 2):
             terms.append(f'max_flights({options["max_flights"]})')
@@ -185,13 +165,11 @@ class Planner:
             terms.append(f'cities([{",".join(picked)}])')
         return terms
 
-    # -- reshaping ---------------------------------------------------------
 
     def _name(self, city_id: str) -> str:
         return self.cities[city_id]["name"]
 
     def _clock(self, city_id: str, utc_minutes: int) -> tuple[str, int]:
-        """UTC minutes -> local "HH:MM" and the day offset. Mirrors local_time/4."""
         local = utc_minutes + self.cities[city_id]["zone"] * 60
         day, clock = divmod(local, 1440)
         return f"{clock // 60:02d}:{clock % 60:02d}", day
@@ -227,7 +205,6 @@ class Planner:
             "cost": {"flights": flights, "ground": ground, "hotel": hotel, "daily": daily, "fees": fees, "total": total},
             "fits": fits == "yes",
             "reasons": [self._reason(r, preference) for r in reasons],
-            # the few that matter to a traveller, shown as "Good to know"
             "notes": [{"kind": r[0], "text": self._reason(r, preference)} for r in reasons if r[0] in IMPORTANT],
             "roomPrice": {c: p for c, p in rooms_per_night},
             "meta": {"rooms": rooms, "nights": nights, "landedDay": landed,
@@ -252,7 +229,7 @@ class Planner:
     def _reason(self, r, preference) -> str:
         tag, *a = r
         n = self._name
-        country = lambda c: self.countries[c]["name"]  # noqa: E731
+        country = lambda c: self.countries[c]["name"]
         if tag == "best":
             return f"{PREF_TEXT[a[0]]} of {a[1]:,} plans Prolog built"
         if tag == "alternative":
@@ -269,6 +246,8 @@ class Planner:
         if tag == "change":
             way = "There" if a[0] == "out" else "Home"
             return f"{way}: change planes in {n(a[1])}, {duration(a[2])} between flights"
+        if tag == "other_airport":
+            return f"Flies home to {n(a[1])}, Bangkok's other airport (you left from {n(a[0])})"
         if tag == "overnight":
             return "Overnight flight: you sleep on the plane and land the next morning"
         if tag == "rooms":
@@ -287,7 +266,7 @@ class Planner:
         if tag == "warning":
             return f"Heads up: {a[1]} in {country(a[0])}"
         if tag == "prices":
-            sign = lambda pct: f"{pct - 100:+d}%"  # noqa: E731
+            sign = lambda pct: f"{pct - 100:+d}%"
             return (f"{MONTHS[a[1] - 1]} in {country(a[0])}: sample flight prices {sign(a[2])}, "
                     f"hotels {sign(a[3])} compared with a normal month")
         if tag == "thai_holiday":
@@ -343,7 +322,6 @@ _planner: Planner | None = None
 
 
 def get_planner() -> Planner:
-    """One shared Prolog engine per process."""
     global _planner
     if _planner is None:
         _planner = Planner()
