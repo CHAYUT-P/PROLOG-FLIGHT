@@ -69,7 +69,8 @@ def _fetch_one(key: str, origin: str, dest: str, month: str, tok: str) -> tuple[
     best = min(offers, key=lambda x: x["price"])
     when = best.get("departure_at", "")
     return key, {"price": int(best["price"]), "date": when[:10], "time": when[11:16],
-                 "airline": best.get("airline", ""), "flight": str(best.get("flight_number", ""))}
+                 "airline": best.get("airline", ""), "flight": str(best.get("flight_number", "")),
+                 "link": best.get("link", "")}
 
 
 def _refresh(keys: list[str], cache: dict, tok: str | None) -> bool:
@@ -77,7 +78,11 @@ def _refresh(keys: list[str], cache: dict, tok: str | None) -> bool:
 
     def fresh(key: str) -> bool:
         hit = cache.get(key)
-        return bool(hit) and now - dt.datetime.fromisoformat(hit["at"]) < dt.timedelta(hours=FRESH_HOURS)
+        if not hit:
+            return False
+        if tok and hit.get("price", -1) > 0 and "link" not in hit:
+            return False
+        return now - dt.datetime.fromisoformat(hit["at"]) < dt.timedelta(hours=FRESH_HOURS)
 
     todo = [k for k in dict.fromkeys(keys) if not fresh(k)]
     if not tok or not todo:

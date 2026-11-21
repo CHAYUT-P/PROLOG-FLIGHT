@@ -291,7 +291,7 @@
       used only for the user interface, map rendering, and optional fare lookup:
     </p>
     <ul>
-      <li><span class="mono">prolog/trip.pl</span>: Knowledge base and logic rules (1,102 lines). Uses only standard
+      <li><span class="mono">prolog/trip.pl</span>: Knowledge base and logic rules (1,095 lines). Uses only standard
           Prolog features from Clocksin &amp; Mellish (facts, rules, arithmetic, lists, cut, dynamic predicates,
           <span class="mono">findall</span>, insertion sort, and graph search).</li>
       <li><span class="mono">backend/planner.py</span> and <span class="mono">backend/geo.py</span>: Connects Python to
@@ -299,7 +299,8 @@
           <span class="mono">plan_trip/11</span>, and converts Prolog lists into Python dictionaries.</li>
       <li><span class="mono">backend/live_prices.py</span>: Optionally fetches real flight fares from the Aviasales
           API (cached in <span class="mono">cache/fares.json</span> so demos work offline) and passes them to Prolog as
-          <span class="mono">live_fare/3</span> and <span class="mono">live_departure/2</span> facts.</li>
+          <span class="mono">live_fare/3</span> and <span class="mono">live_departure/2</span> facts, saving each exact-day
+          offer's Aviasales <span class="mono">link</span> so <span class="mono">ui/booking.py</span> can open that exact flight directly.</li>
       <li><span class="mono">app.py</span> and <span class="mono">ui/*</span>: Desktop application built with PySide6
           (Qt6) with two pages: a search page (trip form and a clickable Asia map) and a results page with a New search button to go back. The results page shows the live Prolog query, replays Prolog's search steps on the map, and displays tickets,
           day-by-day plans, costs, and booking links.</li>
@@ -379,7 +380,9 @@ path_cost(fewest,   Legs, C) : number of legs * 1,000,000 + sum of prices
 path_cost(balanced, Legs, C) : sum of prices + elapsed minutes * 10</pre>
     <p>
       During expansion, Prolog avoids cycles (<span class="mono">\+ member(Next, Seen)</span>), prevents outbound trips
-      from routing back through Thailand (<span class="mono">back_to_thailand/3</span>), and checks time-zone connections
+      from routing back through Thailand (<span class="mono">back_to_thailand/3</span>) or taking pointless domestic
+      detours from Bangkok airports (<span class="mono">bad_thai_hop/3</span> with <span class="mono">bangkok_airport/1</span>),
+      and checks time-zone connections
       in UTC (<span class="mono">to_utc/3</span> and <span class="mono">departure/5</span>) so every layover is at least
       90 minutes and at most 12 hours (720 minutes).
     </p>
@@ -396,19 +399,19 @@ path_cost(balanced, Legs, C) : sum of prices + elapsed minutes * 10</pre>
         <th>Route</th><th>DFS (Cheapest)</th><th>BFS (Cheapest)</th><th>Saved</th>
         <th>DFS (Fastest)</th><th>BFS (Fastest)</th><th>Saved</th>
       </tr>
-      <tr><td>Bangkok -> Tokyo</td><td>54</td><td>41</td><td>24.1%</td><td>54</td><td>32</td><td>40.7%</td></tr>
-<tr><td>Bangkok -> Seoul</td><td>52</td><td>40</td><td>23.1%</td><td>52</td><td>30</td><td>42.3%</td></tr>
-<tr><td>Chiang Mai -> Tokyo</td><td>65</td><td>36</td><td>44.6%</td><td>65</td><td>32</td><td>50.8%</td></tr>
-<tr><td>Phuket -> Tokyo</td><td>62</td><td>40</td><td>35.5%</td><td>62</td><td>36</td><td>41.9%</td></tr>
-<tr><td>Chiang Mai -> Osaka</td><td>65</td><td>36</td><td>44.6%</td><td>65</td><td>37</td><td>43.1%</td></tr>
-<tr><td>Phuket -> Beijing</td><td>62</td><td>37</td><td>40.3%</td><td>62</td><td>47</td><td>24.2%</td></tr>
-<tr><td>Don Mueang -> Tokyo</td><td>36</td><td>51</td><td>-41.7%</td><td>36</td><td>51</td><td>-41.7%</td></tr>
+      <tr><td>Bangkok -&gt; Tokyo</td><td>54</td><td>10</td><td>81.5%</td><td>54</td><td>10</td><td>81.5%</td></tr>
+<tr><td>Bangkok -&gt; Seoul</td><td>52</td><td>9</td><td>82.7%</td><td>52</td><td>9</td><td>82.7%</td></tr>
+<tr><td>Chiang Mai -&gt; Tokyo</td><td>65</td><td>30</td><td>53.8%</td><td>65</td><td>26</td><td>60.0%</td></tr>
+<tr><td>Phuket -&gt; Tokyo</td><td>62</td><td>28</td><td>54.8%</td><td>62</td><td>24</td><td>61.3%</td></tr>
+<tr><td>Chiang Mai -&gt; Osaka</td><td>65</td><td>30</td><td>53.8%</td><td>65</td><td>31</td><td>52.3%</td></tr>
+<tr><td>Phuket -&gt; Beijing</td><td>62</td><td>25</td><td>59.7%</td><td>62</td><td>35</td><td>43.5%</td></tr>
+<tr><td>Don Mueang -&gt; Tokyo</td><td>36</td><td>5</td><td>86.1%</td><td>36</td><td>5</td><td>86.1%</td></tr>
     </table>
     <p>
-      Best-first search does less work on every route from Suvarnabhumi, Chiang Mai and Phuket. Don Mueang is the
-      exception: only a few budget flights leave it, so depth-first search has little to try (36 steps), while best-first
-      search keeps a sorted frontier of partial routes and does more work (51 steps). Best-first search pays off when there
-      are many routes to choose from.
+      Best-first search does less work on every single route, saving 43.5% to 86.1% of search steps across Suvarnabhumi,
+      Don Mueang, Chiang Mai, and Phuket. Blocking pointless domestic hops out of Bangkok
+      (<span class="mono">bad_thai_hop/3</span>) keeps the frontier focused on international legs instead of expanding
+      cheap domestic flights first.
     </p>
   </div>
   <div class="page-num">2</div>
@@ -591,7 +594,7 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
         <section class="page">
           <div class="frame-box code-box">
             <div class="sec-title center-title">Project Source Codes</div>
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102)</div>
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095)</div>
             <pre class="code-pre">   1  :- dynamic(explored/2).
    2  :- dynamic(steps/1).
    3  :- dynamic(flight_memo/4).
@@ -600,1225 +603,1200 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
    6  :- dynamic(live_departure/2).
    7  :- dynamic(option/2).
    8  
-   9  % ===========================================================================
-  10  % 1. FACTS
-  11  % ===========================================================================
-  12  
-  13  country(thailand,    &#x27;Thailand&#x27;,    &#x27;ไทย&#x27;,          0).
-  14  country(japan,       &#x27;Japan&#x27;,       &#x27;ญี่ปุ่น&#x27;,        1500).
-  15  country(korea,       &#x27;South Korea&#x27;, &#x27;เกาหลีใต้&#x27;,      1200).
-  16  country(china,       &#x27;China&#x27;,       &#x27;จีน&#x27;,          900).
-  17  country(singapore,   &#x27;Singapore&#x27;,   &#x27;สิงคโปร์&#x27;,       1400).
+   9  %FACTS
+  10  
+  11  country(thailand,    &#x27;Thailand&#x27;,    &#x27;ไทย&#x27;,          0).
+  12  country(japan,       &#x27;Japan&#x27;,       &#x27;ญี่ปุ่น&#x27;,        1500).
+  13  country(korea,       &#x27;South Korea&#x27;, &#x27;เกาหลีใต้&#x27;,      1200).
+  14  country(china,       &#x27;China&#x27;,       &#x27;จีน&#x27;,          900).
+  15  country(singapore,   &#x27;Singapore&#x27;,   &#x27;สิงคโปร์&#x27;,       1400).
+  16  
+  17  destination(C) :- country(C, _, _, _), \+ C = thailand.
   18  
-  19  destination(C) :- country(C, _, _, _), \+ C = thailand.
-  20  
-  21  visa_free(japan, 15).  visa_free(korea, 90).
-  22  visa_free(china, 30).
-  23  visa_free(singapore, 30).
-  24  
-  25  city(bangkok,      &#x27;Bangkok Suvarnabhumi&#x27;, &#x27;สุวรรณภูมิ&#x27;,   &#x27;BKK&#x27;, thailand,    13.69, 100.75).
-  26  city(don_mueang,   &#x27;Bangkok Don Mueang&#x27;,   &#x27;ดอนเมือง&#x27;,     &#x27;DMK&#x27;, thailand,    13.91, 100.61).
-  27  city(chiang_mai,   &#x27;Chiang Mai&#x27;,       &#x27;เชียงใหม่&#x27;,       &#x27;CNX&#x27;, thailand,    18.77,  98.96).
-  28  city(phuket,       &#x27;Phuket&#x27;,           &#x27;ภูเก็ต&#x27;,          &#x27;HKT&#x27;, thailand,     8.11,  98.31).
-  29  city(tokyo,        &#x27;Tokyo&#x27;,            &#x27;โตเกียว&#x27;,        &#x27;HND&#x27;, japan,       35.68, 139.77).
-  30  city(kyoto,        &#x27;Kyoto&#x27;,            &#x27;เกียวโต&#x27;,        &#x27;KYO&#x27;, japan,       35.01, 135.77).
-  31  city(osaka,        &#x27;Osaka&#x27;,            &#x27;โอซาก้า&#x27;,        &#x27;KIX&#x27;, japan,       34.69, 135.50).
-  32  city(sapporo,      &#x27;Sapporo&#x27;,          &#x27;ซัปโปโร&#x27;,        &#x27;CTS&#x27;, japan,       43.06, 141.35).
-  33  city(seoul,        &#x27;Seoul&#x27;,            &#x27;โซล&#x27;,           &#x27;ICN&#x27;, korea,       37.57, 126.98).
-  34  city(busan,        &#x27;Busan&#x27;,            &#x27;ปูซาน&#x27;,          &#x27;PUS&#x27;, korea,       35.18, 129.08).
-  35  city(jeju,         &#x27;Jeju&#x27;,             &#x27;เชจู&#x27;,           &#x27;CJU&#x27;, korea,       33.50, 126.53).
-  36  city(shanghai,     &#x27;Shanghai&#x27;,         &#x27;เซี่ยงไฮ้&#x27;,        &#x27;PVG&#x27;, china,       31.23, 121.47).
-  37  city(beijing,      &#x27;Beijing&#x27;,          &#x27;ปักกิ่ง&#x27;,          &#x27;PEK&#x27;, china,       39.90, 116.40).
-  38  city(xian,         &#x27;Xi&#x27;&#x27;an&#x27;,           &#x27;ซีอาน&#x27;,          &#x27;XIY&#x27;, china,       34.34, 108.94).
-  39  city(singapore,    &#x27;Singapore&#x27;,        &#x27;สิงคโปร์&#x27;,        &#x27;SIN&#x27;, singapore,    1.35, 103.82).
+  19  visa_free(japan, 15).  visa_free(korea, 90).
+  20  visa_free(china, 30).
+  21  visa_free(singapore, 30).
+  22  
+  23  city(bangkok,      &#x27;Bangkok Suvarnabhumi&#x27;, &#x27;สุวรรณภูมิ&#x27;,   &#x27;BKK&#x27;, thailand,    13.69, 100.75).
+  24  city(don_mueang,   &#x27;Bangkok Don Mueang&#x27;,   &#x27;ดอนเมือง&#x27;,     &#x27;DMK&#x27;, thailand,    13.91, 100.61).
+  25  city(chiang_mai,   &#x27;Chiang Mai&#x27;,       &#x27;เชียงใหม่&#x27;,       &#x27;CNX&#x27;, thailand,    18.77,  98.96).
+  26  city(phuket,       &#x27;Phuket&#x27;,           &#x27;ภูเก็ต&#x27;,          &#x27;HKT&#x27;, thailand,     8.11,  98.31).
+  27  city(tokyo,        &#x27;Tokyo&#x27;,            &#x27;โตเกียว&#x27;,        &#x27;HND&#x27;, japan,       35.68, 139.77).
+  28  city(kyoto,        &#x27;Kyoto&#x27;,            &#x27;เกียวโต&#x27;,        &#x27;KYO&#x27;, japan,       35.01, 135.77).
+  29  city(osaka,        &#x27;Osaka&#x27;,            &#x27;โอซาก้า&#x27;,        &#x27;KIX&#x27;, japan,       34.69, 135.50).
+  30  city(sapporo,      &#x27;Sapporo&#x27;,          &#x27;ซัปโปโร&#x27;,        &#x27;CTS&#x27;, japan,       43.06, 141.35).
+  31  city(seoul,        &#x27;Seoul&#x27;,            &#x27;โซล&#x27;,           &#x27;ICN&#x27;, korea,       37.57, 126.98).
+  32  city(busan,        &#x27;Busan&#x27;,            &#x27;ปูซาน&#x27;,          &#x27;PUS&#x27;, korea,       35.18, 129.08).
+  33  city(jeju,         &#x27;Jeju&#x27;,             &#x27;เชจู&#x27;,           &#x27;CJU&#x27;, korea,       33.50, 126.53).
+  34  city(shanghai,     &#x27;Shanghai&#x27;,         &#x27;เซี่ยงไฮ้&#x27;,        &#x27;PVG&#x27;, china,       31.23, 121.47).
+  35  city(beijing,      &#x27;Beijing&#x27;,          &#x27;ปักกิ่ง&#x27;,          &#x27;PEK&#x27;, china,       39.90, 116.40).
+  36  city(xian,         &#x27;Xi&#x27;&#x27;an&#x27;,           &#x27;ซีอาน&#x27;,          &#x27;XIY&#x27;, china,       34.34, 108.94).
+  37  city(singapore,    &#x27;Singapore&#x27;,        &#x27;สิงคโปร์&#x27;,        &#x27;SIN&#x27;, singapore,    1.35, 103.82).
+  38  
+  39  home(bangkok).  home(don_mueang).  home(chiang_mai).  home(phuket).
   40  
-  41  home(bangkok).  home(don_mueang).  home(chiang_mai).  home(phuket).
+  41  twin(bangkok, don_mueang).  twin(don_mueang, bangkok).
   42  
-  43  twin(bangkok, don_mueang).  twin(don_mueang, bangkok).
-  44  
-  45  airport(bangkok, 7).   airport(don_mueang, 7).  airport(chiang_mai, 7).  airport(phuket, 7).
-  46  airport(tokyo, 9).     airport(osaka, 9).       airport(sapporo, 9).
-  47  airport(seoul, 9).     airport(busan, 9).
-  48  airport(shanghai, 8).  airport(beijing, 8).     airport(xian, 8).
-  49  airport(singapore, 8).
-  50  
-  51  % --- from Bangkok
-  52  flight(&#x27;TG682&#x27;, bangkok, tokyo,       2245, 345, 13500).
-  53  flight(&#x27;XJ600&#x27;, don_mueang, tokyo,        745, 355,  7900).
-  54  flight(&#x27;TG622&#x27;, bangkok, osaka,       2350, 330, 12500).
-  55  flight(&#x27;XJ610&#x27;, don_mueang, osaka,        105, 330,  7200).
-  56  flight(&#x27;XJ620&#x27;, don_mueang, sapporo,       50, 405,  9800).
-  57  flight(&#x27;TG656&#x27;, bangkok, seoul,       2330, 330, 11000).
-  58  flight(&#x27;7C2204&#x27;, bangkok, seoul,       225, 320,  6900).
-  59  flight(&#x27;BX726&#x27;, bangkok, busan,         50, 330,  7500).
-  60  flight(&#x27;MU548&#x27;, bangkok, shanghai,     115, 270,  7200).
-  61  flight(&#x27;CA960&#x27;, bangkok, beijing,       55, 300,  8400).
-  62  flight(&#x27;FD558&#x27;, don_mueang, xian,        1955, 265,  6500).</pre>
+  43  airport(bangkok, 7).   airport(don_mueang, 7).  airport(chiang_mai, 7).  airport(phuket, 7).
+  44  airport(tokyo, 9).     airport(osaka, 9).       airport(sapporo, 9).
+  45  airport(seoul, 9).     airport(busan, 9).
+  46  airport(shanghai, 8).  airport(beijing, 8).     airport(xian, 8).
+  47  airport(singapore, 8).
+  48  
+  49  % --- from Bangkok
+  50  flight(&#x27;TG682&#x27;, bangkok, tokyo,       2245, 345, 13500).
+  51  flight(&#x27;XJ600&#x27;, don_mueang, tokyo,        745, 355,  7900).
+  52  flight(&#x27;TG622&#x27;, bangkok, osaka,       2350, 330, 12500).
+  53  flight(&#x27;XJ610&#x27;, don_mueang, osaka,        105, 330,  7200).
+  54  flight(&#x27;XJ620&#x27;, don_mueang, sapporo,       50, 405,  9800).
+  55  flight(&#x27;TG656&#x27;, bangkok, seoul,       2330, 330, 11000).
+  56  flight(&#x27;7C2204&#x27;, bangkok, seoul,       225, 320,  6900).
+  57  flight(&#x27;BX726&#x27;, bangkok, busan,         50, 330,  7500).
+  58  flight(&#x27;MU548&#x27;, bangkok, shanghai,     115, 270,  7200).
+  59  flight(&#x27;CA960&#x27;, bangkok, beijing,       55, 300,  8400).
+  60  flight(&#x27;FD558&#x27;, don_mueang, xian,        1955, 265,  6500).
+  61  flight(&#x27;SQ711&#x27;, bangkok, singapore,    950, 145,  6500).
+  62  flight(&#x27;TR869&#x27;, don_mueang, singapore,    720, 145,  3400).</pre>
           </div>
           <div class="page-num">8</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre">  63  flight(&#x27;SQ711&#x27;, bangkok, singapore,    950, 145,  6500).
-  64  flight(&#x27;TR869&#x27;, don_mueang, singapore,    720, 145,  3400).
-  65  % --- back to Bangkok
-  66  flight(&#x27;TG683&#x27;, tokyo,        bangkok, 1030, 405, 13500).
-  67  flight(&#x27;XJ601&#x27;, tokyo,        don_mueang, 1700, 415,  7900).
-  68  flight(&#x27;TG623&#x27;, osaka,        bangkok, 1100, 375, 12500).
-  69  flight(&#x27;XJ611&#x27;, osaka,        don_mueang, 1645, 380,  7400).
-  70  flight(&#x27;XJ621&#x27;, sapporo,      don_mueang,  950, 480,  9800).
-  71  flight(&#x27;TG657&#x27;, seoul,        bangkok, 1940, 360, 11000).
-  72  flight(&#x27;7C2203&#x27;, seoul,       bangkok, 2010, 365,  6900).
-  73  flight(&#x27;BX725&#x27;, busan,        bangkok, 1940, 365,  7500).
-  74  flight(&#x27;MU547&#x27;, shanghai,     bangkok, 1810, 300,  7200).
-  75  flight(&#x27;CA959&#x27;, beijing,      bangkok, 1720, 340,  8400).
-  76  flight(&#x27;FD559&#x27;, xian,         don_mueang,   30, 285,  6500).
-  77  flight(&#x27;SQ706&#x27;, singapore,    bangkok,  745, 145,  6500).
-  78  flight(&#x27;TR868&#x27;, singapore,    don_mueang, 1805, 145,  3400).
-  79  % --- inside Thailand, to connect through Bangkok
-  80  flight(&#x27;TG101&#x27;, chiang_mai,   bangkok,    700,  70,  1500).
-  81  flight(&#x27;TG103&#x27;, chiang_mai,   bangkok,   1230,  70,  1500).
-  82  flight(&#x27;TG105&#x27;, chiang_mai,   bangkok,   1830,  70,  1500).
-  83  flight(&#x27;TG100&#x27;, bangkok,      chiang_mai, 830,  70,  1500).
-  84  flight(&#x27;TG102&#x27;, bangkok,      chiang_mai,1430,  70,  1500).
-  85  flight(&#x27;TG104&#x27;, bangkok,      chiang_mai,2030,  70,  1500).
-  86  flight(&#x27;TG201&#x27;, phuket,       bangkok,    700,  85,  1800).
-  87  flight(&#x27;TG203&#x27;, phuket,       bangkok,   1200,  85,  1800).
-  88  flight(&#x27;TG205&#x27;, phuket,       bangkok,   1800,  85,  1800).
-  89  flight(&#x27;TG200&#x27;, bangkok,      phuket,     900,  85,  1800).
-  90  flight(&#x27;TG202&#x27;, bangkok,      phuket,    1500,  85,  1800).
-  91  flight(&#x27;TG204&#x27;, bangkok,      phuket,    2100,  85,  1800).
-  92  flight(&#x27;FD3432&#x27;, chiang_mai,  don_mueang,  640,  75,  1100).
-  93  flight(&#x27;FD3438&#x27;, chiang_mai,  don_mueang, 1715,  75,  1100).
-  94  flight(&#x27;FD3431&#x27;, don_mueang,  chiang_mai,  800,  75,  1100).
-  95  flight(&#x27;FD3437&#x27;, don_mueang,  chiang_mai, 2050,  75,  1100).
-  96  flight(&#x27;FD3022&#x27;, phuket,      don_mueang,  650,  85,  1300).
-  97  flight(&#x27;FD3028&#x27;, phuket,      don_mueang, 1720,  85,  1300).
-  98  flight(&#x27;FD3021&#x27;, don_mueang,  phuket,      815,  85,  1300).
-  99  flight(&#x27;FD3027&#x27;, don_mueang,  phuket,     2100,  85,  1300).
- 100  % --- Chiang Mai
- 101  flight(&#x27;TW104&#x27;, chiang_mai,   seoul,       50, 330,  7200).
- 102  flight(&#x27;TW103&#x27;, seoul,        chiang_mai, 1940, 360, 7200).
- 103  flight(&#x27;TR847&#x27;, chiang_mai,   singapore, 1355, 195,  4300).
- 104  flight(&#x27;TR846&#x27;, singapore,    chiang_mai,1035, 200,  4300).
- 105  flight(&#x27;HO1342&#x27;, chiang_mai,  shanghai,   130, 250,  6400).
- 106  flight(&#x27;HO1341&#x27;, shanghai,    chiang_mai,2050, 270,  6400).
- 107  % --- Phuket
- 108  flight(&#x27;KE638&#x27;, phuket,       seoul,     2240, 375, 12000).
- 109  flight(&#x27;KE637&#x27;, seoul,        phuket,    1830, 395, 12000).
- 110  flight(&#x27;SQ727&#x27;, phuket,       singapore, 1210, 100,  4200).
- 111  flight(&#x27;SQ726&#x27;, singapore,    phuket,     955, 100,  4200).
- 112  % --- connections between hubs
- 113  flight(&#x27;KE705&#x27;, seoul,        tokyo,      850, 140,  5200).
- 114  flight(&#x27;KE706&#x27;, tokyo,        seoul,     1300, 160,  5200).
- 115  flight(&#x27;SQ636&#x27;, singapore,    tokyo,      745, 400, 11900).
- 116  flight(&#x27;SQ637&#x27;, tokyo,        singapore, 1105, 435, 11900).
- 117  flight(&#x27;MU523&#x27;, shanghai,     tokyo,      855, 180,  5900).
- 118  flight(&#x27;MU524&#x27;, tokyo,        shanghai,  1335, 210,  5900).
- 119  
- 120  % --- Japan
- 121  ground(tokyo,     kyoto,       high_speed, 3300, 135).
- 122  ground(tokyo,     kyoto,       night_bus,  1000, 480).
- 123  ground(tokyo,     osaka,       high_speed, 3400, 150).
- 124  ground(tokyo,     osaka,       night_bus,  1000, 510).
- 125  ground(tokyo,     osaka,       plane,      1800,  70).
- 126  ground(kyoto,     osaka,       train,       150,  30).</pre>
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre">  63  % --- back to Bangkok
+  64  flight(&#x27;TG683&#x27;, tokyo,        bangkok, 1030, 405, 13500).
+  65  flight(&#x27;XJ601&#x27;, tokyo,        don_mueang, 1700, 415,  7900).
+  66  flight(&#x27;TG623&#x27;, osaka,        bangkok, 1100, 375, 12500).
+  67  flight(&#x27;XJ611&#x27;, osaka,        don_mueang, 1645, 380,  7400).
+  68  flight(&#x27;XJ621&#x27;, sapporo,      don_mueang,  950, 480,  9800).
+  69  flight(&#x27;TG657&#x27;, seoul,        bangkok, 1940, 360, 11000).
+  70  flight(&#x27;7C2203&#x27;, seoul,       bangkok, 2010, 365,  6900).
+  71  flight(&#x27;BX725&#x27;, busan,        bangkok, 1940, 365,  7500).
+  72  flight(&#x27;MU547&#x27;, shanghai,     bangkok, 1810, 300,  7200).
+  73  flight(&#x27;CA959&#x27;, beijing,      bangkok, 1720, 340,  8400).
+  74  flight(&#x27;FD559&#x27;, xian,         don_mueang,   30, 285,  6500).
+  75  flight(&#x27;SQ706&#x27;, singapore,    bangkok,  745, 145,  6500).
+  76  flight(&#x27;TR868&#x27;, singapore,    don_mueang, 1805, 145,  3400).
+  77  % --- inside Thailand, to connect through Bangkok
+  78  flight(&#x27;TG101&#x27;, chiang_mai,   bangkok,    700,  70,  1500).
+  79  flight(&#x27;TG103&#x27;, chiang_mai,   bangkok,   1230,  70,  1500).
+  80  flight(&#x27;TG105&#x27;, chiang_mai,   bangkok,   1830,  70,  1500).
+  81  flight(&#x27;TG100&#x27;, bangkok,      chiang_mai, 830,  70,  1500).
+  82  flight(&#x27;TG102&#x27;, bangkok,      chiang_mai,1430,  70,  1500).
+  83  flight(&#x27;TG104&#x27;, bangkok,      chiang_mai,2030,  70,  1500).
+  84  flight(&#x27;TG201&#x27;, phuket,       bangkok,    700,  85,  1800).
+  85  flight(&#x27;TG203&#x27;, phuket,       bangkok,   1200,  85,  1800).
+  86  flight(&#x27;TG205&#x27;, phuket,       bangkok,   1800,  85,  1800).
+  87  flight(&#x27;TG200&#x27;, bangkok,      phuket,     900,  85,  1800).
+  88  flight(&#x27;TG202&#x27;, bangkok,      phuket,    1500,  85,  1800).
+  89  flight(&#x27;TG204&#x27;, bangkok,      phuket,    2100,  85,  1800).
+  90  flight(&#x27;FD3432&#x27;, chiang_mai,  don_mueang,  640,  75,  1100).
+  91  flight(&#x27;FD3438&#x27;, chiang_mai,  don_mueang, 1715,  75,  1100).
+  92  flight(&#x27;FD3431&#x27;, don_mueang,  chiang_mai,  800,  75,  1100).
+  93  flight(&#x27;FD3437&#x27;, don_mueang,  chiang_mai, 2050,  75,  1100).
+  94  flight(&#x27;FD3022&#x27;, phuket,      don_mueang,  650,  85,  1300).
+  95  flight(&#x27;FD3028&#x27;, phuket,      don_mueang, 1720,  85,  1300).
+  96  flight(&#x27;FD3021&#x27;, don_mueang,  phuket,      815,  85,  1300).
+  97  flight(&#x27;FD3027&#x27;, don_mueang,  phuket,     2100,  85,  1300).
+  98  % --- Chiang Mai
+  99  flight(&#x27;TW104&#x27;, chiang_mai,   seoul,       50, 330,  7200).
+ 100  flight(&#x27;TW103&#x27;, seoul,        chiang_mai, 1940, 360, 7200).
+ 101  flight(&#x27;TR847&#x27;, chiang_mai,   singapore, 1355, 195,  4300).
+ 102  flight(&#x27;TR846&#x27;, singapore,    chiang_mai,1035, 200,  4300).
+ 103  flight(&#x27;HO1342&#x27;, chiang_mai,  shanghai,   130, 250,  6400).
+ 104  flight(&#x27;HO1341&#x27;, shanghai,    chiang_mai,2050, 270,  6400).
+ 105  % --- Phuket
+ 106  flight(&#x27;KE638&#x27;, phuket,       seoul,     2240, 375, 12000).
+ 107  flight(&#x27;KE637&#x27;, seoul,        phuket,    1830, 395, 12000).
+ 108  flight(&#x27;SQ727&#x27;, phuket,       singapore, 1210, 100,  4200).
+ 109  flight(&#x27;SQ726&#x27;, singapore,    phuket,     955, 100,  4200).
+ 110  % --- connections between hubs
+ 111  flight(&#x27;KE705&#x27;, seoul,        tokyo,      850, 140,  5200).
+ 112  flight(&#x27;KE706&#x27;, tokyo,        seoul,     1300, 160,  5200).
+ 113  flight(&#x27;SQ636&#x27;, singapore,    tokyo,      745, 400, 11900).
+ 114  flight(&#x27;SQ637&#x27;, tokyo,        singapore, 1105, 435, 11900).
+ 115  flight(&#x27;MU523&#x27;, shanghai,     tokyo,      855, 180,  5900).
+ 116  flight(&#x27;MU524&#x27;, tokyo,        shanghai,  1335, 210,  5900).
+ 117  
+ 118  % --- Japan
+ 119  ground(tokyo,     kyoto,       high_speed, 3300, 135).
+ 120  ground(tokyo,     kyoto,       night_bus,  1000, 480).
+ 121  ground(tokyo,     osaka,       high_speed, 3400, 150).
+ 122  ground(tokyo,     osaka,       night_bus,  1000, 510).
+ 123  ground(tokyo,     osaka,       plane,      1800,  70).
+ 124  ground(kyoto,     osaka,       train,       150,  30).</pre>
           </div>
           <div class="page-num">9</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 127  ground(tokyo,     sapporo,     plane,      3500, 100).
- 128  ground(osaka,     sapporo,     plane,      3800, 125).
- 129  % --- South Korea
- 130  ground(seoul,     busan,       high_speed, 1400, 150).
- 131  ground(seoul,     busan,       bus,         700, 260).
- 132  ground(seoul,     jeju,        plane,      1500,  70).
- 133  ground(busan,     jeju,        plane,      1300,  60).
- 134  ground(busan,     jeju,        night_ferry,1200, 720).
- 135  % --- China
- 136  ground(shanghai,  beijing,     high_speed, 2800, 270).
- 137  ground(shanghai,  beijing,     night_train,1800, 720).
- 138  ground(beijing,   xian,        high_speed, 2600, 270).
- 139  ground(beijing,   xian,        night_train,1500, 720).
- 140  ground(shanghai,  xian,        high_speed, 3000, 360).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 125  ground(tokyo,     sapporo,     plane,      3500, 100).
+ 126  ground(osaka,     sapporo,     plane,      3800, 125).
+ 127  % --- South Korea
+ 128  ground(seoul,     busan,       high_speed, 1400, 150).
+ 129  ground(seoul,     busan,       bus,         700, 260).
+ 130  ground(seoul,     jeju,        plane,      1500,  70).
+ 131  ground(busan,     jeju,        plane,      1300,  60).
+ 132  ground(busan,     jeju,        night_ferry,1200, 720).
+ 133  % --- China
+ 134  ground(shanghai,  beijing,     high_speed, 2800, 270).
+ 135  ground(shanghai,  beijing,     night_train,1800, 720).
+ 136  ground(beijing,   xian,        high_speed, 2600, 270).
+ 137  ground(beijing,   xian,        night_train,1500, 720).
+ 138  ground(shanghai,  xian,        high_speed, 3000, 360).
+ 139  
+ 140  overnight(night_bus).  overnight(night_train).  overnight(night_ferry).
  141  
- 142  overnight(night_bus).  overnight(night_train).  overnight(night_ferry).
- 143  
- 144  stay(tokyo, 3200).     stay(kyoto, 2900).      stay(osaka, 2600).     stay(sapporo, 2400).
- 145  stay(seoul, 2200).     stay(busan, 1900).      stay(jeju, 2000).
- 146  stay(shanghai, 2200).  stay(beijing, 2100).    stay(xian, 1500).
- 147  stay(singapore, 3800).
- 148  
- 149  attraction(tokyo, &#x27;Senso-ji Temple&#x27;,          culture,      0, 2).
- 150  attraction(tokyo, &#x27;Tsukiji Outer Market&#x27;,     food,       600, 2).
- 151  attraction(tokyo, &#x27;Shibuya and Harajuku&#x27;,     shopping,     0, 3).
- 152  attraction(tokyo, &#x27;teamLab Planets&#x27;,          adventure,  900, 2).
- 153  attraction(tokyo, &#x27;Shinjuku izakaya alleys&#x27;,  nightlife,  800, 2).
- 154  attraction(tokyo, &#x27;Mount Takao hike&#x27;,         nature,     300, 5).
- 155  attraction(tokyo, &#x27;Meiji Shrine&#x27;, culture, 0, 1.5).
- 156  attraction(tokyo, &#x27;Akihabara electronics town&#x27;, shopping, 0, 3).
- 157  attraction(tokyo, &#x27;Tokyo Skytree&#x27;, adventure, 1000, 2).
- 158  attraction(tokyo, &#x27;Ueno Park and museums&#x27;, culture, 300, 3).
- 159  attraction(tokyo, &#x27;Odaiba waterfront&#x27;, shopping, 0, 3).
- 160  attraction(tokyo, &#x27;Ginza&#x27;, shopping, 0, 2).
- 161  attraction(tokyo, &#x27;Shinjuku Gyoen garden&#x27;, nature, 150, 2).
- 162  attraction(tokyo, &#x27;Tokyo DisneySea&#x27;, adventure, 2400, 8).
- 163  attraction(tokyo, &#x27;Mount Fuji and Lake Kawaguchi day trip&#x27;, nature, 1500, 8).
- 164  attraction(tokyo, &#x27;Kamakura day trip&#x27;, culture, 600, 6).
- 165  attraction(tokyo, &#x27;Nikko day trip&#x27;, culture, 1200, 8).
- 166  attraction(tokyo, &#x27;Sushi and ramen crawl&#x27;, food, 800, 2).
- 167  attraction(tokyo, &#x27;Golden Gai bars&#x27;, nightlife, 600, 2).
- 168  attraction(tokyo, &#x27;Tokyo Tower&#x27;, culture, 300, 1.5).
- 169  attraction(kyoto, &#x27;Fushimi Inari Shrine&#x27;,     culture,      0, 3).
- 170  attraction(kyoto, &#x27;Arashiyama Bamboo Grove&#x27;,  nature,       0, 2).
- 171  attraction(kyoto, &#x27;Kinkaku-ji&#x27;,               culture,    120, 1.5).
- 172  attraction(kyoto, &#x27;Nishiki Market&#x27;,           food,       500, 2).
- 173  attraction(kyoto, &#x27;Kiyomizu-dera&#x27;, culture, 100, 2).
- 174  attraction(kyoto, &#x27;Gion evening walk&#x27;, culture, 0, 2).
- 175  attraction(kyoto, &#x27;Nara day trip and deer park&#x27;, nature, 200, 6).
- 176  attraction(kyoto, &#x27;Philosopher&#x27;&#x27;s Path&#x27;, nature, 0, 1.5).
- 177  attraction(kyoto, &#x27;Kaiseki dinner&#x27;, food, 1500, 2).
- 178  attraction(osaka, &#x27;Dotonbori street food&#x27;,    food,       600, 2).
- 179  attraction(osaka, &#x27;Universal Studios Japan&#x27;,  adventure, 2300, 8).
- 180  attraction(osaka, &#x27;Osaka Castle&#x27;,             culture,    140, 2).
- 181  attraction(osaka, &#x27;Shinsaibashi shopping&#x27;,    shopping,     0, 3).
- 182  attraction(osaka, &#x27;Kuromon Market&#x27;, food, 400, 2).
- 183  attraction(osaka, &#x27;Umeda Sky Building&#x27;, culture, 400, 1.5).
- 184  attraction(osaka, &#x27;Kaiyukan Aquarium&#x27;, adventure, 700, 3).
- 185  attraction(osaka, &#x27;Shinsekai kushikatsu&#x27;, food, 400, 2).
- 186  attraction(osaka, &#x27;Namba nightlife&#x27;, nightlife, 500, 2).
- 187  attraction(sapporo, &#x27;Odori Park&#x27;,             nature,       0, 1.5).
- 188  attraction(sapporo, &#x27;Ramen Alley&#x27;,            food,       350, 1).
- 189  attraction(sapporo, &#x27;Otaru canal day trip&#x27;,   culture,    300, 5).
- 190  attraction(sapporo, &#x27;Mount Moiwa ropeway&#x27;,    nature,     500, 2).</pre>
+ 142  stay(tokyo, 3200).     stay(kyoto, 2900).      stay(osaka, 2600).     stay(sapporo, 2400).
+ 143  stay(seoul, 2200).     stay(busan, 1900).      stay(jeju, 2000).
+ 144  stay(shanghai, 2200).  stay(beijing, 2100).    stay(xian, 1500).
+ 145  stay(singapore, 3800).
+ 146  
+ 147  attraction(tokyo, &#x27;Senso-ji Temple&#x27;,          culture,      0, 2).
+ 148  attraction(tokyo, &#x27;Tsukiji Outer Market&#x27;,     food,       600, 2).
+ 149  attraction(tokyo, &#x27;Shibuya and Harajuku&#x27;,     shopping,     0, 3).
+ 150  attraction(tokyo, &#x27;teamLab Planets&#x27;,          adventure,  900, 2).
+ 151  attraction(tokyo, &#x27;Shinjuku izakaya alleys&#x27;,  nightlife,  800, 2).
+ 152  attraction(tokyo, &#x27;Mount Takao hike&#x27;,         nature,     300, 5).
+ 153  attraction(tokyo, &#x27;Meiji Shrine&#x27;, culture, 0, 1.5).
+ 154  attraction(tokyo, &#x27;Akihabara electronics town&#x27;, shopping, 0, 3).
+ 155  attraction(tokyo, &#x27;Tokyo Skytree&#x27;, adventure, 1000, 2).
+ 156  attraction(tokyo, &#x27;Ueno Park and museums&#x27;, culture, 300, 3).
+ 157  attraction(tokyo, &#x27;Odaiba waterfront&#x27;, shopping, 0, 3).
+ 158  attraction(tokyo, &#x27;Ginza&#x27;, shopping, 0, 2).
+ 159  attraction(tokyo, &#x27;Shinjuku Gyoen garden&#x27;, nature, 150, 2).
+ 160  attraction(tokyo, &#x27;Tokyo DisneySea&#x27;, adventure, 2400, 8).
+ 161  attraction(tokyo, &#x27;Mount Fuji and Lake Kawaguchi day trip&#x27;, nature, 1500, 8).
+ 162  attraction(tokyo, &#x27;Kamakura day trip&#x27;, culture, 600, 6).
+ 163  attraction(tokyo, &#x27;Nikko day trip&#x27;, culture, 1200, 8).
+ 164  attraction(tokyo, &#x27;Sushi and ramen crawl&#x27;, food, 800, 2).
+ 165  attraction(tokyo, &#x27;Golden Gai bars&#x27;, nightlife, 600, 2).
+ 166  attraction(tokyo, &#x27;Tokyo Tower&#x27;, culture, 300, 1.5).
+ 167  attraction(kyoto, &#x27;Fushimi Inari Shrine&#x27;,     culture,      0, 3).
+ 168  attraction(kyoto, &#x27;Arashiyama Bamboo Grove&#x27;,  nature,       0, 2).
+ 169  attraction(kyoto, &#x27;Kinkaku-ji&#x27;,               culture,    120, 1.5).
+ 170  attraction(kyoto, &#x27;Nishiki Market&#x27;,           food,       500, 2).
+ 171  attraction(kyoto, &#x27;Kiyomizu-dera&#x27;, culture, 100, 2).
+ 172  attraction(kyoto, &#x27;Gion evening walk&#x27;, culture, 0, 2).
+ 173  attraction(kyoto, &#x27;Nara day trip and deer park&#x27;, nature, 200, 6).
+ 174  attraction(kyoto, &#x27;Philosopher&#x27;&#x27;s Path&#x27;, nature, 0, 1.5).
+ 175  attraction(kyoto, &#x27;Kaiseki dinner&#x27;, food, 1500, 2).
+ 176  attraction(osaka, &#x27;Dotonbori street food&#x27;,    food,       600, 2).
+ 177  attraction(osaka, &#x27;Universal Studios Japan&#x27;,  adventure, 2300, 8).
+ 178  attraction(osaka, &#x27;Osaka Castle&#x27;,             culture,    140, 2).
+ 179  attraction(osaka, &#x27;Shinsaibashi shopping&#x27;,    shopping,     0, 3).
+ 180  attraction(osaka, &#x27;Kuromon Market&#x27;, food, 400, 2).
+ 181  attraction(osaka, &#x27;Umeda Sky Building&#x27;, culture, 400, 1.5).
+ 182  attraction(osaka, &#x27;Kaiyukan Aquarium&#x27;, adventure, 700, 3).
+ 183  attraction(osaka, &#x27;Shinsekai kushikatsu&#x27;, food, 400, 2).
+ 184  attraction(osaka, &#x27;Namba nightlife&#x27;, nightlife, 500, 2).
+ 185  attraction(sapporo, &#x27;Odori Park&#x27;,             nature,       0, 1.5).
+ 186  attraction(sapporo, &#x27;Ramen Alley&#x27;,            food,       350, 1).</pre>
           </div>
           <div class="page-num">10</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 191  attraction(sapporo, &#x27;Sapporo Beer Museum&#x27;, food, 200, 2).
- 192  attraction(sapporo, &#x27;Jozankei hot spring day trip&#x27;, nature, 800, 5).
- 193  attraction(sapporo, &#x27;Susukino nightlife&#x27;, nightlife, 500, 2).
- 194  
- 195  attraction(seoul, &#x27;Gyeongbokgung Palace&#x27;,     culture,     80, 2).
- 196  attraction(seoul, &#x27;Myeongdong shopping&#x27;,      shopping,     0, 3).
- 197  attraction(seoul, &#x27;Gwangjang Market&#x27;,         food,       400, 2).
- 198  attraction(seoul, &#x27;Bukhansan hike&#x27;,           nature,       0, 5).
- 199  attraction(seoul, &#x27;Hongdae nightlife&#x27;,        nightlife,  600, 3).
- 200  attraction(seoul, &#x27;Bukchon Hanok Village&#x27;, culture, 0, 2).
- 201  attraction(seoul, &#x27;N Seoul Tower&#x27;, culture, 500, 2).
- 202  attraction(seoul, &#x27;Lotte World&#x27;, adventure, 1500, 6).
- 203  attraction(seoul, &#x27;Korean barbecue dinner&#x27;, food, 600, 2).
- 204  attraction(seoul, &#x27;DMZ tour&#x27;, culture, 2000, 8).
- 205  attraction(seoul, &#x27;Insadong&#x27;, shopping, 0, 2).
- 206  attraction(seoul, &#x27;Changdeokgung Secret Garden&#x27;, nature, 200, 2).
- 207  attraction(seoul, &#x27;Cheonggyecheon stream walk&#x27;, nature, 0, 1).
- 208  attraction(busan, &#x27;Haeundae Beach&#x27;,           beach,        0, 3).
- 209  attraction(busan, &#x27;Gamcheon Culture Village&#x27;, culture,      0, 2).
- 210  attraction(busan, &#x27;Jagalchi Fish Market&#x27;,     food,       600, 2).
- 211  attraction(busan, &#x27;Haedong Yonggungsa Temple&#x27;, culture, 0, 2).
- 212  attraction(busan, &#x27;Gwangalli bridge at night&#x27;, nightlife, 0, 2).
- 213  attraction(busan, &#x27;Taejongdae cliffs&#x27;, nature, 100, 3).
- 214  attraction(jeju, &#x27;Hallasan hike&#x27;,             nature,       0, 7).
- 215  attraction(jeju, &#x27;Seongsan Sunrise Peak&#x27;,     nature,     130, 2).
- 216  attraction(jeju, &#x27;Hyeopjae Beach&#x27;,            beach,        0, 3).
- 217  attraction(jeju, &#x27;Manjanggul lava tube&#x27;, nature, 150, 2).
- 218  attraction(jeju, &#x27;Black pork barbecue&#x27;, food, 600, 2).
- 219  attraction(jeju, &#x27;Udo Island&#x27;, beach, 300, 5).
- 220  
- 221  attraction(shanghai, &#x27;The Bund&#x27;,              culture,      0, 2).
- 222  attraction(shanghai, &#x27;Yu Garden&#x27;,             culture,    200, 2).
- 223  attraction(shanghai, &#x27;Nanjing Road&#x27;,          shopping,     0, 3).
- 224  attraction(shanghai, &#x27;Xiaolongbao crawl&#x27;,     food,       400, 2).
- 225  attraction(shanghai, &#x27;Zhujiajiao water town&#x27;, nature,       0, 4).
- 226  attraction(shanghai, &#x27;Shanghai Tower&#x27;, adventure, 800, 2).
- 227  attraction(shanghai, &#x27;French Concession walk&#x27;, culture, 0, 3).
- 228  attraction(shanghai, &#x27;Shanghai Disneyland&#x27;, adventure, 2700, 8).
- 229  attraction(beijing, &#x27;Great Wall at Mutianyu&#x27;, adventure,  600, 6).
- 230  attraction(beijing, &#x27;Forbidden City&#x27;,         culture,    300, 4).
- 231  attraction(beijing, &#x27;Peking duck dinner&#x27;,     food,       900, 2).
- 232  attraction(beijing, &#x27;Summer Palace&#x27;,          nature,     150, 3).
- 233  attraction(beijing, &#x27;Temple of Heaven&#x27;, culture, 150, 2).
- 234  attraction(beijing, &#x27;Hutong rickshaw tour&#x27;, culture, 500, 2).
- 235  attraction(beijing, &#x27;Wangfujing snack street&#x27;, food, 300, 2).
- 236  attraction(xian, &#x27;Terracotta Army&#x27;,           culture,    600, 4).
- 237  attraction(xian, &#x27;City Wall bike ride&#x27;,       adventure,  250, 2).
- 238  attraction(xian, &#x27;Muslim Quarter food street&#x27;, food,      300, 2).
- 239  
- 240  attraction(singapore, &#x27;Gardens by the Bay&#x27;,   nature,     700, 3).
- 241  attraction(singapore, &#x27;Hawker centre feast&#x27;,  food,       300, 2).
- 242  attraction(singapore, &#x27;Universal Studios Singapore&#x27;, adventure, 2100, 8).
- 243  attraction(singapore, &#x27;Marina Bay Sands SkyPark&#x27;, culture, 900, 1.5).
- 244  attraction(singapore, &#x27;Orchard Road&#x27;,         shopping,     0, 3).
- 245  attraction(singapore, &#x27;Clarke Quay&#x27;,          nightlife,  800, 2).
- 246  attraction(singapore, &#x27;Sentosa beaches&#x27;, beach, 0, 4).
- 247  attraction(singapore, &#x27;Night Safari&#x27;, nature, 1300, 4).
- 248  attraction(singapore, &#x27;Chinatown and Little India&#x27;, culture, 0, 3).
- 249  attraction(singapore, &#x27;Jewel Changi&#x27;, shopping, 0, 2).
- 250  attraction(singapore, &#x27;S.E.A. Aquarium&#x27;, adventure, 1100, 3).
- 251  attraction(singapore, &#x27;Singapore Botanic Gardens&#x27;, nature, 0, 2.5).
- 252  attraction(singapore, &#x27;Singapore Flyer&#x27;, culture, 900, 1.5).
- 253  attraction(singapore, &#x27;Haji Lane and Kampong Glam&#x27;, shopping, 0, 2).
- 254  attraction(singapore, &#x27;Pulau Ubin bike day&#x27;, nature, 200, 5).</pre>
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 187  attraction(sapporo, &#x27;Otaru canal day trip&#x27;,   culture,    300, 5).
+ 188  attraction(sapporo, &#x27;Mount Moiwa ropeway&#x27;,    nature,     500, 2).
+ 189  attraction(sapporo, &#x27;Sapporo Beer Museum&#x27;, food, 200, 2).
+ 190  attraction(sapporo, &#x27;Jozankei hot spring day trip&#x27;, nature, 800, 5).
+ 191  attraction(sapporo, &#x27;Susukino nightlife&#x27;, nightlife, 500, 2).
+ 192  
+ 193  attraction(seoul, &#x27;Gyeongbokgung Palace&#x27;,     culture,     80, 2).
+ 194  attraction(seoul, &#x27;Myeongdong shopping&#x27;,      shopping,     0, 3).
+ 195  attraction(seoul, &#x27;Gwangjang Market&#x27;,         food,       400, 2).
+ 196  attraction(seoul, &#x27;Bukhansan hike&#x27;,           nature,       0, 5).
+ 197  attraction(seoul, &#x27;Hongdae nightlife&#x27;,        nightlife,  600, 3).
+ 198  attraction(seoul, &#x27;Bukchon Hanok Village&#x27;, culture, 0, 2).
+ 199  attraction(seoul, &#x27;N Seoul Tower&#x27;, culture, 500, 2).
+ 200  attraction(seoul, &#x27;Lotte World&#x27;, adventure, 1500, 6).
+ 201  attraction(seoul, &#x27;Korean barbecue dinner&#x27;, food, 600, 2).
+ 202  attraction(seoul, &#x27;DMZ tour&#x27;, culture, 2000, 8).
+ 203  attraction(seoul, &#x27;Insadong&#x27;, shopping, 0, 2).
+ 204  attraction(seoul, &#x27;Changdeokgung Secret Garden&#x27;, nature, 200, 2).
+ 205  attraction(seoul, &#x27;Cheonggyecheon stream walk&#x27;, nature, 0, 1).
+ 206  attraction(busan, &#x27;Haeundae Beach&#x27;,           beach,        0, 3).
+ 207  attraction(busan, &#x27;Gamcheon Culture Village&#x27;, culture,      0, 2).
+ 208  attraction(busan, &#x27;Jagalchi Fish Market&#x27;,     food,       600, 2).
+ 209  attraction(busan, &#x27;Haedong Yonggungsa Temple&#x27;, culture, 0, 2).
+ 210  attraction(busan, &#x27;Gwangalli bridge at night&#x27;, nightlife, 0, 2).
+ 211  attraction(busan, &#x27;Taejongdae cliffs&#x27;, nature, 100, 3).
+ 212  attraction(jeju, &#x27;Hallasan hike&#x27;,             nature,       0, 7).
+ 213  attraction(jeju, &#x27;Seongsan Sunrise Peak&#x27;,     nature,     130, 2).
+ 214  attraction(jeju, &#x27;Hyeopjae Beach&#x27;,            beach,        0, 3).
+ 215  attraction(jeju, &#x27;Manjanggul lava tube&#x27;, nature, 150, 2).
+ 216  attraction(jeju, &#x27;Black pork barbecue&#x27;, food, 600, 2).
+ 217  attraction(jeju, &#x27;Udo Island&#x27;, beach, 300, 5).
+ 218  
+ 219  attraction(shanghai, &#x27;The Bund&#x27;,              culture,      0, 2).
+ 220  attraction(shanghai, &#x27;Yu Garden&#x27;,             culture,    200, 2).
+ 221  attraction(shanghai, &#x27;Nanjing Road&#x27;,          shopping,     0, 3).
+ 222  attraction(shanghai, &#x27;Xiaolongbao crawl&#x27;,     food,       400, 2).
+ 223  attraction(shanghai, &#x27;Zhujiajiao water town&#x27;, nature,       0, 4).
+ 224  attraction(shanghai, &#x27;Shanghai Tower&#x27;, adventure, 800, 2).
+ 225  attraction(shanghai, &#x27;French Concession walk&#x27;, culture, 0, 3).
+ 226  attraction(shanghai, &#x27;Shanghai Disneyland&#x27;, adventure, 2700, 8).
+ 227  attraction(beijing, &#x27;Great Wall at Mutianyu&#x27;, adventure,  600, 6).
+ 228  attraction(beijing, &#x27;Forbidden City&#x27;,         culture,    300, 4).
+ 229  attraction(beijing, &#x27;Peking duck dinner&#x27;,     food,       900, 2).
+ 230  attraction(beijing, &#x27;Summer Palace&#x27;,          nature,     150, 3).
+ 231  attraction(beijing, &#x27;Temple of Heaven&#x27;, culture, 150, 2).
+ 232  attraction(beijing, &#x27;Hutong rickshaw tour&#x27;, culture, 500, 2).
+ 233  attraction(beijing, &#x27;Wangfujing snack street&#x27;, food, 300, 2).
+ 234  attraction(xian, &#x27;Terracotta Army&#x27;,           culture,    600, 4).
+ 235  attraction(xian, &#x27;City Wall bike ride&#x27;,       adventure,  250, 2).
+ 236  attraction(xian, &#x27;Muslim Quarter food street&#x27;, food,      300, 2).
+ 237  
+ 238  attraction(singapore, &#x27;Gardens by the Bay&#x27;,   nature,     700, 3).
+ 239  attraction(singapore, &#x27;Hawker centre feast&#x27;,  food,       300, 2).
+ 240  attraction(singapore, &#x27;Universal Studios Singapore&#x27;, adventure, 2100, 8).
+ 241  attraction(singapore, &#x27;Marina Bay Sands SkyPark&#x27;, culture, 900, 1.5).
+ 242  attraction(singapore, &#x27;Orchard Road&#x27;,         shopping,     0, 3).
+ 243  attraction(singapore, &#x27;Clarke Quay&#x27;,          nightlife,  800, 2).
+ 244  attraction(singapore, &#x27;Sentosa beaches&#x27;, beach, 0, 4).
+ 245  attraction(singapore, &#x27;Night Safari&#x27;, nature, 1300, 4).
+ 246  attraction(singapore, &#x27;Chinatown and Little India&#x27;, culture, 0, 3).
+ 247  attraction(singapore, &#x27;Jewel Changi&#x27;, shopping, 0, 2).
+ 248  attraction(singapore, &#x27;S.E.A. Aquarium&#x27;, adventure, 1100, 3).</pre>
           </div>
           <div class="page-num">11</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 255  attraction(singapore, &#x27;Lau Pa Sat satay night&#x27;, food, 300, 2).
- 256  attraction(singapore, &#x27;ArtScience Museum&#x27;, culture, 700, 2).
- 257  attraction(singapore, &#x27;East Coast Park seafood&#x27;, food, 900, 3).
- 258  attraction(singapore, &#x27;Bird Paradise&#x27;, nature, 1200, 4).
- 259  
- 260  highlight(japan, &#x27;cherry blossom season&#x27;, [3, 4]).
- 261  highlight(japan, &#x27;autumn leaves&#x27;, [11]).
- 262  highlight(japan, &#x27;the Sapporo Snow Festival&#x27;, [2]).
- 263  highlight(korea, &#x27;cherry blossoms&#x27;, [4]).
- 264  highlight(korea, &#x27;autumn colours&#x27;, [10, 11]).
- 265  highlight(china, &#x27;mild spring weather&#x27;, [4, 5]).
- 266  highlight(china, &#x27;golden autumn&#x27;, [9, 10]).
- 267  highlight(singapore, &#x27;Chinese New Year lights&#x27;, [1, 2]).
- 268  
- 269  warning(japan, &#x27;the rainy season&#x27;, [6]).
- 270  warning(japan, &#x27;typhoon season&#x27;, [8, 9]).
- 271  warning(korea, &#x27;heavy monsoon rain&#x27;, [7]).
- 272  warning(korea, &#x27;freezing winter&#x27;, [12, 1, 2]).
- 273  warning(china, &#x27;freezing winter in Beijing&#x27;, [12, 1, 2]).
- 274  warning(china, &#x27;Golden Week crowds&#x27;, [10]).
- 275  warning(singapore, &#x27;the rainy monsoon&#x27;, [11, 12, 1]).
- 276  
- 277  interest(nature).  interest(culture).   interest(food).  interest(shopping).
- 278  interest(beach).   interest(adventure). interest(nightlife).
- 279  
- 280  stay_range(tokyo, 3, 6).      stay_range(kyoto, 2, 4).      stay_range(osaka, 2, 3).
- 281  stay_range(sapporo, 2, 3).
- 282  stay_range(seoul, 3, 5).      stay_range(busan, 2, 3).      stay_range(jeju, 2, 3).
- 283  stay_range(shanghai, 3, 4).   stay_range(beijing, 3, 4).    stay_range(xian, 2, 3).
- 284  stay_range(singapore, 3, 6).
- 285  
- 286  busy(japan,       [3, 4],        30).
- 287  busy(japan,       [11],          15).
- 288  busy(japan,       [6],          -15).
- 289  busy(korea,       [4, 10],       20).
- 290  busy(korea,       [1, 2],       -15).
- 291  busy(china,       [10],          25).
- 292  busy(china,       [1, 2],        20).
- 293  busy(singapore,   [12],          15).
- 294  
- 295  thai_holiday([4],     20, &#x27;Songkran&#x27;).
- 296  thai_holiday([10],    10, &#x27;the October school break&#x27;).
- 297  thai_holiday([12, 1], 20, &#x27;New Year&#x27;).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 249  attraction(singapore, &#x27;Singapore Botanic Gardens&#x27;, nature, 0, 2.5).
+ 250  attraction(singapore, &#x27;Singapore Flyer&#x27;, culture, 900, 1.5).
+ 251  attraction(singapore, &#x27;Haji Lane and Kampong Glam&#x27;, shopping, 0, 2).
+ 252  attraction(singapore, &#x27;Pulau Ubin bike day&#x27;, nature, 200, 5).
+ 253  attraction(singapore, &#x27;Lau Pa Sat satay night&#x27;, food, 300, 2).
+ 254  attraction(singapore, &#x27;ArtScience Museum&#x27;, culture, 700, 2).
+ 255  attraction(singapore, &#x27;East Coast Park seafood&#x27;, food, 900, 3).
+ 256  attraction(singapore, &#x27;Bird Paradise&#x27;, nature, 1200, 4).
+ 257  
+ 258  highlight(japan, &#x27;cherry blossom season&#x27;, [3, 4]).
+ 259  highlight(japan, &#x27;autumn leaves&#x27;, [11]).
+ 260  highlight(japan, &#x27;the Sapporo Snow Festival&#x27;, [2]).
+ 261  highlight(korea, &#x27;cherry blossoms&#x27;, [4]).
+ 262  highlight(korea, &#x27;autumn colours&#x27;, [10, 11]).
+ 263  highlight(china, &#x27;mild spring weather&#x27;, [4, 5]).
+ 264  highlight(china, &#x27;golden autumn&#x27;, [9, 10]).
+ 265  highlight(singapore, &#x27;Chinese New Year lights&#x27;, [1, 2]).
+ 266  
+ 267  warning(japan, &#x27;the rainy season&#x27;, [6]).
+ 268  warning(japan, &#x27;typhoon season&#x27;, [8, 9]).
+ 269  warning(korea, &#x27;heavy monsoon rain&#x27;, [7]).
+ 270  warning(korea, &#x27;freezing winter&#x27;, [12, 1, 2]).
+ 271  warning(china, &#x27;freezing winter in Beijing&#x27;, [12, 1, 2]).
+ 272  warning(china, &#x27;Golden Week crowds&#x27;, [10]).
+ 273  warning(singapore, &#x27;the rainy monsoon&#x27;, [11, 12, 1]).
+ 274  
+ 275  interest(nature).  interest(culture).   interest(food).  interest(shopping).
+ 276  interest(beach).   interest(adventure). interest(nightlife).
+ 277  
+ 278  stay_range(tokyo, 3, 6).      stay_range(kyoto, 2, 4).      stay_range(osaka, 2, 3).
+ 279  stay_range(sapporo, 2, 3).
+ 280  stay_range(seoul, 3, 5).      stay_range(busan, 2, 3).      stay_range(jeju, 2, 3).
+ 281  stay_range(shanghai, 3, 4).   stay_range(beijing, 3, 4).    stay_range(xian, 2, 3).
+ 282  stay_range(singapore, 3, 6).
+ 283  
+ 284  busy(japan,       [3, 4],        30).
+ 285  busy(japan,       [11],          15).
+ 286  busy(japan,       [6],          -15).
+ 287  busy(korea,       [4, 10],       20).
+ 288  busy(korea,       [1, 2],       -15).
+ 289  busy(china,       [10],          25).
+ 290  busy(china,       [1, 2],        20).
+ 291  busy(singapore,   [12],          15).
+ 292  
+ 293  thai_holiday([4],     20, &#x27;Songkran&#x27;).
+ 294  thai_holiday([10],    10, &#x27;the October school break&#x27;).
+ 295  thai_holiday([12, 1], 20, &#x27;New Year&#x27;).
+ 296  
+ 297  %HELPERS
  298  
- 299  % ===========================================================================
- 300  % 2. HELPERS — written the way the book writes them
- 301  % ===========================================================================
- 302  
- 303  listlen([], 0).
- 304  listlen([_ | T], N) :- listlen(T, N0), N is N0 + 1.
- 305  
- 306  last_elem([X], X) :- !.
- 307  last_elem([_ | T], X) :- last_elem(T, X).
+ 299  listlen([], 0).
+ 300  listlen([_ | T], N) :- listlen(T, N0), N is N0 + 1.
+ 301  
+ 302  last_elem([X], X) :- !.
+ 303  last_elem([_ | T], X) :- last_elem(T, X).
+ 304  
+ 305  take(0, _, []) :- !.
+ 306  take(_, [], []) :- !.
+ 307  take(N, [X | Xs], [X | Ys]) :- N1 is N - 1, take(N1, Xs, Ys).
  308  
- 309  take(0, _, []) :- !.
- 310  take(_, [], []) :- !.
- 311  take(N, [X | Xs], [X | Ys]) :- N1 is N - 1, take(N1, Xs, Ys).
- 312  
- 313  no_dups(List, Result) :- no_dups(List, [], Result).
- 314  no_dups([], _, []).
- 315  no_dups([X | T], Seen, R) :- member(X, Seen), !, no_dups(T, Seen, R).
- 316  no_dups([X | T], Seen, [X | R]) :- no_dups(T, [X | Seen], R).
- 317  
- 318  clamp(X, Lo, _, Lo) :- X &lt; Lo, !.</pre>
+ 309  no_dups(List, Result) :- no_dups(List, [], Result).
+ 310  no_dups([], _, []).</pre>
           </div>
           <div class="page-num">12</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 319  clamp(X, _, Hi, Hi) :- X &gt; Hi, !.
- 320  clamp(X, _, _, X).
- 321  
- 322  insort([], []).
- 323  insort([X | L], M) :- insort(L, N), insortx(X, N, M).
- 324  insortx(X, [A | L], [A | M]) :- before(A, X), !, insortx(X, L, M).
- 325  insortx(X, L, [X | L]).
- 326  before(K1 - _, K2 - _) :- K1 =&lt; K2.
- 327  
- 328  values([], []).
- 329  values([_ - V | T], [V | Vs]) :- values(T, Vs).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 311  no_dups([X | T], Seen, R) :- member(X, Seen), !, no_dups(T, Seen, R).
+ 312  no_dups([X | T], Seen, [X | R]) :- no_dups(T, [X | Seen], R).
+ 313  
+ 314  clamp(X, Lo, _, Lo) :- X &lt; Lo, !.
+ 315  clamp(X, _, Hi, Hi) :- X &gt; Hi, !.
+ 316  clamp(X, _, _, X).
+ 317  
+ 318  insort([], []).
+ 319  insort([X | L], M) :- insort(L, N), insortx(X, N, M).
+ 320  insortx(X, [A | L], [A | M]) :- before(A, X), !, insortx(X, L, M).
+ 321  insortx(X, L, [X | L]).
+ 322  before(K1 - _, K2 - _) :- K1 =&lt; K2.
+ 323  
+ 324  values([], []).
+ 325  values([_ - V | T], [V | Vs]) :- values(T, Vs).
+ 326  
+ 327  %TIME — clock times, time zones and connections
+ 328  
+ 329  clock_minutes(HHMM, M) :- M is (HHMM // 100) * 60 + HHMM mod 100.
  330  
- 331  % ===========================================================================
- 332  % 3. TIME — clock times, time zones and connections
- 333  % ===========================================================================
- 334  
- 335  clock_minutes(HHMM, M) :- M is (HHMM // 100) * 60 + HHMM mod 100.
- 336  
- 337  to_utc(City, HHMM, T) :-
- 338      airport(City, Zone),
- 339      clock_minutes(HHMM, M),
- 340      T is M - Zone * 60.
+ 331  to_utc(City, HHMM, T) :-
+ 332      airport(City, Zone),
+ 333      clock_minutes(HHMM, M),
+ 334      T is M - Zone * 60.
+ 335  
+ 336  local_time(City, T, Day, Clock) :-
+ 337      airport(City, Zone),
+ 338      L is T + Zone * 60,
+ 339      Day is L // 1440,
+ 340      Clock is L mod 1440.
  341  
- 342  local_time(City, T, Day, Clock) :-
- 343      airport(City, Zone),
- 344      L is T + Zone * 60,
- 345      Day is L // 1440,
- 346      Clock is L mod 1440.
- 347  
- 348  departure(start, City, HHMM, Dep, 0) :-
- 349      to_utc(City, HHMM, Dep).
- 350  departure(landed(Arr), City, HHMM, Dep, Wait) :-
- 351      to_utc(City, HHMM, T),
- 352      W is (T - Arr) mod 1440,
- 353      enough_time(W, Wait),
- 354      Wait =&lt; 720,
- 355      Dep is Arr + Wait.
- 356  
- 357  enough_time(W, W) :- W &gt;= 90, !.
- 358  enough_time(W, W1) :- W1 is W + 1440.
- 359  
- 360  % ===========================================================================
- 361  % 3a. OPTIONS — the traveller&#x27;s extra choices
- 362  % ===========================================================================
- 363  
- 364  default_option(max_flights, 3).
- 365  default_option(airlines, any).
- 366  default_option(night_flights, allowed).
- 367  default_option(hotel, mid).
- 368  default_option(cities, []).
- 369  default_option(getting_around, any).
- 370  
- 371  opt(Name, Value) :- option(Name, V), !, Value = V.
- 372  opt(Name, Value) :- default_option(Name, Value).
- 373  
- 374  set_options(_) :- retract(option(_, _)), fail.
- 375  set_options(Opts) :- store_options(Opts).
- 376  
- 377  store_options([]).
- 378  store_options([O | Os]) :- O =.. [Name, Value], assertz(option(Name, Value)), store_options(Os).
- 379  
- 380  airline_ok(_, From, To) :-
- 381      city(From, _, _, _, thailand, _, _), city(To, _, _, _, thailand, _, _), !.
- 382  airline_ok(_, _, _) :- opt(airlines, any), !.</pre>
+ 342  departure(start, City, HHMM, Dep, 0) :-
+ 343      to_utc(City, HHMM, Dep).
+ 344  departure(landed(Arr), City, HHMM, Dep, Wait) :-
+ 345      to_utc(City, HHMM, T),
+ 346      W is (T - Arr) mod 1440,
+ 347      enough_time(W, Wait),
+ 348      Wait =&lt; 720,
+ 349      Dep is Arr + Wait.
+ 350  
+ 351  enough_time(W, W) :- W &gt;= 90, !.
+ 352  enough_time(W, W1) :- W1 is W + 1440.
+ 353  
+ 354  %OPTIONS — the traveller&#x27;s extra choices
+ 355  
+ 356  default_option(max_flights, 3).
+ 357  default_option(airlines, any).
+ 358  default_option(night_flights, allowed).
+ 359  default_option(hotel, mid).
+ 360  default_option(cities, []).
+ 361  default_option(getting_around, any).
+ 362  
+ 363  opt(Name, Value) :- option(Name, V), !, Value = V.
+ 364  opt(Name, Value) :- default_option(Name, Value).
+ 365  
+ 366  set_options(_) :- retract(option(_, _)), fail.
+ 367  set_options(Opts) :- store_options(Opts).
+ 368  
+ 369  store_options([]).
+ 370  store_options([O | Os]) :- O =.. [Name, Value], assertz(option(Name, Value)), store_options(Os).
+ 371  
+ 372  airline_ok(_, From, To) :-</pre>
           </div>
           <div class="page-num">13</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 383  airline_ok(Code, _, _) :- opt(airlines, budget), !, airline(Code, A), low_cost(A).
- 384  airline_ok(Code, _, _) :- opt(airlines, full), airline(Code, A), \+ low_cost(A).
- 385  
- 386  daytime_ok(_) :- opt(night_flights, allowed), !.
- 387  daytime_ok(HHMM) :- HHMM &gt;= 600, HHMM =&lt; 2200.
- 388  
- 389  hotel_factor(budget, 60).
- 390  hotel_factor(mid, 100).
- 391  hotel_factor(luxury, 220).
- 392  
- 393  chosen_ok(Country, Cities) :-
- 394      opt(cities, All),
- 395      findall(M, (member(M, All), city(M, _, _, _, Country, _, _)), Mine),
- 396      chosen_ok2(Mine, Cities).
- 397  
- 398  chosen_ok2([], _) :- !.
- 399  chosen_ok2(Mine, Cities) :-
- 400      all_in(Mine, Cities),
- 401      middle(Cities, Mid),
- 402      all_in(Mid, Mine),
- 403      ends_ok(Cities, Mine).
- 404  
- 405  all_in([], _).
- 406  all_in([X | Xs], L) :- member(X, L), all_in(Xs, L).
- 407  
- 408  middle([_], []) :- !.
- 409  middle([_, _], []) :- !.
- 410  middle([_ | T], Mid) :- rev(T, [_ | MidRev]), rev(MidRev, Mid).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 373      city(From, _, _, _, thailand, _, _), city(To, _, _, _, thailand, _, _), !.
+ 374  airline_ok(_, _, _) :- opt(airlines, any), !.
+ 375  airline_ok(Code, _, _) :- opt(airlines, budget), !, airline(Code, A), low_cost(A).
+ 376  airline_ok(Code, _, _) :- opt(airlines, full), airline(Code, A), \+ low_cost(A).
+ 377  
+ 378  daytime_ok(_) :- opt(night_flights, allowed), !.
+ 379  daytime_ok(HHMM) :- HHMM &gt;= 600, HHMM =&lt; 2200.
+ 380  
+ 381  hotel_factor(budget, 60).
+ 382  hotel_factor(mid, 100).
+ 383  hotel_factor(luxury, 220).
+ 384  
+ 385  chosen_ok(Country, Cities) :-
+ 386      opt(cities, All),
+ 387      findall(M, (member(M, All), city(M, _, _, _, Country, _, _)), Mine),
+ 388      chosen_ok2(Mine, Cities).
+ 389  
+ 390  chosen_ok2([], _) :- !.
+ 391  chosen_ok2(Mine, Cities) :-
+ 392      all_in(Mine, Cities),
+ 393      middle(Cities, Mid),
+ 394      all_in(Mid, Mine),
+ 395      ends_ok(Cities, Mine).
+ 396  
+ 397  all_in([], _).
+ 398  all_in([X | Xs], L) :- member(X, L), all_in(Xs, L).
+ 399  
+ 400  middle([_], []) :- !.
+ 401  middle([_, _], []) :- !.
+ 402  middle([_ | T], Mid) :- rev(T, [_ | MidRev]), rev(MidRev, Mid).
+ 403  
+ 404  ends_ok([C], Mine) :- !, member(C, Mine).
+ 405  ends_ok(Cities, Mine) :-
+ 406      Cities = [First, Second | _], end_ok(First, Second, Mine),
+ 407      rev(Cities, [Last, Before | _]), end_ok(Last, Before, Mine).
+ 408  
+ 409  end_ok(C, _, Mine) :- member(C, Mine), !.
+ 410  end_ok(C, Next, Mine) :- airport(C, _), member(Next, Mine), \+ airport(Next, _).
  411  
- 412  ends_ok([C], Mine) :- !, member(C, Mine).
- 413  ends_ok(Cities, Mine) :-
- 414      Cities = [First, Second | _], end_ok(First, Second, Mine),
- 415      rev(Cities, [Last, Before | _]), end_ok(Last, Before, Mine).
- 416  
- 417  end_ok(C, _, Mine) :- member(C, Mine), !.
- 418  end_ok(C, Next, Mine) :- airport(C, _), member(Next, Mine), \+ airport(Next, _).
+ 412  ground_ok(_) :- opt(getting_around, any), !.
+ 413  ground_ok(Mode) :- opt(getting_around, no_night), !, \+ overnight(Mode).
+ 414  ground_ok(Mode) :- opt(getting_around, fast), \+ overnight(Mode), \+ Mode = bus.
+ 415  
+ 416  gateway(City) :- opt(cities, Ms), \+ Ms = [], \+ member(City, Ms).
+ 417  
+ 418  %PRICES — the month changes what things cost
  419  
- 420  ground_ok(_) :- opt(getting_around, any), !.
- 421  ground_ok(Mode) :- opt(getting_around, no_night), !, \+ overnight(Mode).
- 422  ground_ok(Mode) :- opt(getting_around, fast), \+ overnight(Mode), \+ Mode = bus.
+ 420  season_extra(Country, Month, Extra) :-
+ 421      findall(P, (busy(Country, Months, P), member(Month, Months)), Ps),
+ 422      sum(Ps, Extra).
  423  
- 424  gateway(City) :- opt(cities, Ms), \+ Ms = [], \+ member(City, Ms).
- 425  
- 426  % ===========================================================================
- 427  % 3b. PRICES — the month changes what things cost
- 428  % ===========================================================================
- 429  
- 430  season_extra(Country, Month, Extra) :-
- 431      findall(P, (busy(Country, Months, P), member(Month, Months)), Ps),
- 432      sum(Ps, Extra).
- 433  
- 434  holiday_extra(Month, Extra) :-
- 435      findall(P, (thai_holiday(Months, P, _), member(Month, Months)), Ps),
- 436      sum(Ps, Extra).
- 437  
- 438  flight_level(Country, Month, Pct) :-
- 439      season_extra(Country, Month, A), holiday_extra(Month, B), Pct is 100 + A + B.
- 440  hotel_level(Country, Month, Pct) :-
- 441      season_extra(Country, Month, A), Pct is 100 + A.
- 442  
- 443  leg_country(_, To, C) :- city(To, _, _, _, C, _, _), \+ C = thailand, !.
- 444  leg_country(From, _, C) :- city(From, _, _, _, C, _, _).
- 445  
- 446  low_cost(&#x27;XJ&#x27;). low_cost(&#x27;FD&#x27;). low_cost(&#x27;VZ&#x27;). low_cost(&#x27;AK&#x27;). low_cost(&#x27;TR&#x27;).</pre>
+ 424  holiday_extra(Month, Extra) :-
+ 425      findall(P, (thai_holiday(Months, P, _), member(Month, Months)), Ps),
+ 426      sum(Ps, Extra).
+ 427  
+ 428  flight_level(Country, Month, Pct) :-
+ 429      season_extra(Country, Month, A), holiday_extra(Month, B), Pct is 100 + A + B.
+ 430  hotel_level(Country, Month, Pct) :-
+ 431      season_extra(Country, Month, A), Pct is 100 + A.
+ 432  
+ 433  leg_country(_, To, C) :- city(To, _, _, _, C, _, _), \+ C = thailand, !.
+ 434  leg_country(From, _, C) :- city(From, _, _, _, C, _, _).</pre>
           </div>
           <div class="page-num">14</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 447  low_cost(&#x27;7C&#x27;). low_cost(&#x27;BX&#x27;). low_cost(&#x27;5J&#x27;). low_cost(&#x27;VJ&#x27;). low_cost(&#x27;D7&#x27;).
- 448  low_cost(&#x27;TW&#x27;).
- 449  
- 450  airline(Code, Airline) :- atom_chars(Code, [A, B | _]), atom_chars(Airline, [A, B]).
- 451  
- 452  departs(Code, _, HHMM) :- live_departure(Code, HHMM), !.
- 453  departs(_, HHMM, HHMM).
- 454  
- 455  flight_price(Code, From, To, _, Price) :-
- 456      live_fare(From, To, Live), airline(Code, A), low_cost(A), !,
- 457      Price = Live.
- 458  flight_price(_, From, To, _, Price) :-
- 459      live_fare(From, To, Live), !,
- 460      Price is Live * 160 // 100.
- 461  flight_price(_, From, To, Sample, Price) :-
- 462      trip_month(Month),
- 463      leg_country(From, To, Country),
- 464      flight_level(Country, Month, Pct),
- 465      Price is Sample * Pct // 100.
- 466  
- 467  room_price(City, Price) :-
- 468      stay(City, Sample),
- 469      city(City, _, _, _, Country, _, _),
- 470      trip_month(Month),
- 471      hotel_level(Country, Month, Pct),
- 472      opt(hotel, Level), hotel_factor(Level, F),
- 473      Price is Sample * Pct // 100 * F // 100.
- 474  
- 475  set_month(_) :- retract(trip_month(_)), fail.
- 476  set_month(Month) :- assertz(trip_month(Month)).
- 477  
- 478  % ===========================================================================
- 479  % 4. SEARCH
- 480  % ===========================================================================
- 481  
- 482  reset_search :-
- 483      retract_all_explored,
- 484      assertz(steps(0)).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 435  
+ 436  low_cost(&#x27;XJ&#x27;). low_cost(&#x27;FD&#x27;). low_cost(&#x27;VZ&#x27;). low_cost(&#x27;AK&#x27;). low_cost(&#x27;TR&#x27;).
+ 437  low_cost(&#x27;7C&#x27;). low_cost(&#x27;BX&#x27;). low_cost(&#x27;5J&#x27;). low_cost(&#x27;VJ&#x27;). low_cost(&#x27;D7&#x27;).
+ 438  low_cost(&#x27;TW&#x27;).
+ 439  
+ 440  airline(Code, Airline) :- atom_chars(Code, [A, B | _]), atom_chars(Airline, [A, B]).
+ 441  
+ 442  departs(Code, _, HHMM) :- live_departure(Code, HHMM), !.
+ 443  departs(_, HHMM, HHMM).
+ 444  
+ 445  flight_price(Code, From, To, _, Price) :-
+ 446      live_fare(From, To, Live), airline(Code, A), low_cost(A), !,
+ 447      Price = Live.
+ 448  flight_price(_, From, To, _, Price) :-
+ 449      live_fare(From, To, Live), !,
+ 450      Price is Live * 160 // 100.
+ 451  flight_price(_, From, To, Sample, Price) :-
+ 452      trip_month(Month),
+ 453      leg_country(From, To, Country),
+ 454      flight_level(Country, Month, Pct),
+ 455      Price is Sample * Pct // 100.
+ 456  
+ 457  room_price(City, Price) :-
+ 458      stay(City, Sample),
+ 459      city(City, _, _, _, Country, _, _),
+ 460      trip_month(Month),
+ 461      hotel_level(Country, Month, Pct),
+ 462      opt(hotel, Level), hotel_factor(Level, F),
+ 463      Price is Sample * Pct // 100 * F // 100.
+ 464  
+ 465  set_month(_) :- retract(trip_month(_)), fail.
+ 466  set_month(Month) :- assertz(trip_month(Month)).
+ 467  
+ 468  %SEARCH
+ 469  
+ 470  reset_search :-
+ 471      retract_all_explored,
+ 472      assertz(steps(0)).
+ 473  
+ 474  retract_all_explored :- retract(explored(_, _)), fail.
+ 475  retract_all_explored :- retract(steps(_)), fail.
+ 476  retract_all_explored :- retract(flight_memo(_, _, _, _)), fail.
+ 477  retract_all_explored.
+ 478  
+ 479  note_explored(A, B) :-
+ 480      retract(steps(N)), N1 is N + 1, assertz(steps(N1)),
+ 481      remember_edge(A, B).
+ 482  
+ 483  remember_edge(A, B) :- explored(A, B), !.
+ 484  remember_edge(A, B) :- assertz(explored(A, B)).
  485  
- 486  retract_all_explored :- retract(explored(_, _)), fail.
- 487  retract_all_explored :- retract(steps(_)), fail.
- 488  retract_all_explored :- retract(flight_memo(_, _, _, _)), fail.
- 489  retract_all_explored.
- 490  
- 491  note_explored(A, B) :-
- 492      retract(steps(N)), N1 is N + 1, assertz(steps(N1)),
- 493      remember_edge(A, B).
- 494  
- 495  remember_edge(A, B) :- explored(A, B), !.
- 496  remember_edge(A, B) :- assertz(explored(A, B)).
- 497  
- 498  fly(From, To, Legs) :- fly(From, To, 2, [From], start, Legs).
- 499  
- 500  fly(Here, Here, _, _, _, []).
- 501  fly(Here, To, N, Trail, Clock, [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Rest]) :-
- 502      \+ Here = To,
- 503      N &gt; 0,
- 504      flight(Code, Here, Next, Timetable, Minutes, Sample),
- 505      \+ member(Next, Trail),
- 506      departs(Code, Timetable, HHMM),
- 507      flight_price(Code, Here, Next, Sample, Price),
- 508      note_explored(Here, Next),
- 509      departure(Clock, Here, HHMM, Dep, Wait),
- 510      Arr is Dep + Minutes,</pre>
+ 486  fly(From, To, Legs) :- fly(From, To, 2, [From], start, Legs).
+ 487  
+ 488  fly(Here, Here, _, _, _, []).
+ 489  fly(Here, To, N, Trail, Clock, [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Rest]) :-
+ 490      \+ Here = To,
+ 491      N &gt; 0,
+ 492      flight(Code, Here, Next, Timetable, Minutes, Sample),
+ 493      \+ member(Next, Trail),
+ 494      departs(Code, Timetable, HHMM),
+ 495      flight_price(Code, Here, Next, Sample, Price),
+ 496      note_explored(Here, Next),</pre>
           </div>
           <div class="page-num">15</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 511      N1 is N - 1,
- 512      fly(Next, To, N1, [Next | Trail], landed(Arr), Rest).
- 513  
- 514  legs_price([], 0).
- 515  legs_price([leg(_, _, _, _, _, P, _) | Legs], Total) :-
- 516      legs_price(Legs, T0), Total is T0 + P.
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 497      departure(Clock, Here, HHMM, Dep, Wait),
+ 498      Arr is Dep + Minutes,
+ 499      N1 is N - 1,
+ 500      fly(Next, To, N1, [Next | Trail], landed(Arr), Rest).
+ 501  
+ 502  legs_price([], 0).
+ 503  legs_price([leg(_, _, _, _, _, P, _) | Legs], Total) :-
+ 504      legs_price(Legs, T0), Total is T0 + P.
+ 505  
+ 506  legs_minutes(Legs, M) :-
+ 507      Legs = [leg(_, _, _, Dep, _, _, _) | _],
+ 508      last_elem(Legs, leg(_, _, _, _, Arr, _, _)),
+ 509      M is Arr - Dep.
+ 510  
+ 511  flight_key(cheapest, Legs, K) :- legs_price(Legs, K).
+ 512  flight_key(fastest,  Legs, K) :- legs_minutes(Legs, K).
+ 513  flight_key(fewest,   Legs, K) :- listlen(Legs, N), legs_price(Legs, P), K is N * 1000000 + P.
+ 514  flight_key(balanced, Legs, K) :- legs_price(Legs, P), legs_minutes(Legs, M), K is P + M * 10.
+ 515  
+ 516  %BEST-FIRST SEARCH 
  517  
- 518  legs_minutes(Legs, M) :-
- 519      Legs = [leg(_, _, _, Dep, _, _, _) | _],
- 520      last_elem(Legs, leg(_, _, _, _, Arr, _, _)),
- 521      M is Arr - Dep.
+ 518  path_cost(cheapest, Legs, C) :- legs_price(Legs, C).
+ 519  path_cost(fastest,  Legs, C) :- elapsed(Legs, C).
+ 520  path_cost(fewest,   Legs, C) :- listlen(Legs, N), legs_price(Legs, P), C is N * 1000000 + P.
+ 521  path_cost(balanced, Legs, C) :- legs_price(Legs, P), elapsed(Legs, M), C is P + M * 10.
  522  
- 523  flight_key(cheapest, Legs, K) :- legs_price(Legs, K).
- 524  flight_key(fastest,  Legs, K) :- legs_minutes(Legs, K).
- 525  flight_key(fewest,   Legs, K) :- listlen(Legs, N), legs_price(Legs, P), K is N * 1000000 + P.
- 526  flight_key(balanced, Legs, K) :- legs_price(Legs, P), legs_minutes(Legs, M), K is P + M * 10.
+ 523  elapsed(Legs, M) :-
+ 524      Legs = [leg(_, _, _, _, Arr, _, _) | _],
+ 525      last_elem(Legs, leg(_, _, _, Dep, _, _, _)),
+ 526      M is Arr - Dep.
  527  
- 528  % ---------------------------------------------------------------------------
- 529  % BEST-FIRST SEARCH — the &quot;best route&quot; algorithm of section 7.9 (go3)
- 530  % ---------------------------------------------------------------------------
+ 528  rev(L, R) :- rev(L, [], R).
+ 529  rev([], A, A).
+ 530  rev([H | T], A, R) :- rev(T, [H | A], R).
  531  
- 532  path_cost(cheapest, Legs, C) :- legs_price(Legs, C).
- 533  path_cost(fastest,  Legs, C) :- elapsed(Legs, C).
- 534  path_cost(fewest,   Legs, C) :- listlen(Legs, N), legs_price(Legs, P), C is N * 1000000 + P.
- 535  path_cost(balanced, Legs, C) :- legs_price(Legs, P), elapsed(Legs, M), C is P + M * 10.
+ 532  shortest([R | Rs], S, [R | Rest]) :- shortest(Rs, S, Rest), cheaper(S, R), !.
+ 533  shortest([R | Rs], R, Rs).
+ 534  
+ 535  cheaper(r(C1, _, _, _, _), r(C2, _, _, _, _)) :- C1 &lt; C2.
  536  
- 537  elapsed(Legs, M) :-
- 538      Legs = [leg(_, _, _, _, Arr, _, _) | _],
- 539      last_elem(Legs, leg(_, _, _, Dep, _, _, _)),
- 540      M is Arr - Dep.
- 541  
- 542  rev(L, R) :- rev(L, [], R).
- 543  rev([], A, A).
- 544  rev([H | T], A, R) :- rev(T, [H | A], R).
- 545  
- 546  shortest([R | Rs], S, [R | Rest]) :- shortest(Rs, S, Rest), cheaper(S, R), !.
- 547  shortest([R | Rs], R, Rs).
- 548  
- 549  cheaper(r(C1, _, _, _, _), r(C2, _, _, _, _)) :- C1 &lt; C2.
- 550  
- 551  back_to_thailand(Here, Next, To) :-
- 552      city(To, _, _, _, C0, _, _), \+ C0 = thailand,
- 553      city(Here, _, _, _, C1, _, _), \+ C1 = thailand,
- 554      city(Next, _, _, _, thailand, _, _).
- 555  
- 556  best_routes(From, To, Pref, K, Routes) :-
- 557      bf([r(0, From, start, [From], [])], To, Pref, K, Routes).
- 558  
- 559  bf(_, _, _, 0, []) :- !.
- 560  bf([], _, _, _, []) :- !.
- 561  bf(Queue, To, Pref, K, Routes) :-
- 562      shortest(Queue, Best, Rest),
- 563      visit(Best, Rest, To, Pref, K, Routes).
- 564  
- 565  visit(r(_, To, _, _, Legs), Rest, To, Pref, K, [Route | More]) :-
- 566      \+ Legs = [], !,
- 567      rev(Legs, Route),
- 568      K1 is K - 1,
- 569      bf(Rest, To, Pref, K1, More).
- 570  visit(r(_, Here, Clock, Seen, Legs), Rest, To, Pref, K, Routes) :-
- 571      opt(max_flights, Max),
- 572      listlen(Legs, N), N &lt; Max, !,
- 573      findall(r(C, Next, landed(Arr), [Next | Seen], [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs]),
- 574              ( flight(Code, Here, Next, Timetable, Minutes, Sample),</pre>
+ 537  bangkok_airport(bangkok).
+ 538  bangkok_airport(don_mueang).
+ 539  
+ 540  back_to_thailand(Here, Next, To) :-
+ 541      city(To, _, _, _, C0, _, _), \+ C0 = thailand,
+ 542      city(Here, _, _, _, C1, _, _), \+ C1 = thailand,
+ 543      city(Next, _, _, _, thailand, _, _).
+ 544  
+ 545  bad_thai_hop(Here, Next, To) :-
+ 546      city(To, _, _, _, C0, _, _), \+ C0 = thailand,
+ 547      bangkok_airport(Here),
+ 548      city(Next, _, _, _, thailand, _, _).
+ 549  bad_thai_hop(_, Next, To) :-
+ 550      bangkok_airport(To),
+ 551      city(Next, _, _, _, thailand, _, _),
+ 552      \+ Next = To.
+ 553  bad_thai_hop(_, Next, To) :-
+ 554      city(To, _, _, _, thailand, _, _), \+ bangkok_airport(To),
+ 555      city(Next, _, _, _, thailand, _, _),
+ 556      \+ Next = To, \+ bangkok_airport(Next).
+ 557  
+ 558  best_routes(From, To, Pref, K, Routes) :-</pre>
           </div>
           <div class="page-num">16</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 575                \+ member(Next, Seen),
- 576                \+ back_to_thailand(Here, Next, To),
- 577                airline_ok(Code, Here, Next),
- 578                departs(Code, Timetable, HHMM),
- 579                daytime_ok(HHMM),
- 580                departure(Clock, Here, HHMM, Dep, Wait),
- 581                Arr is Dep + Minutes,
- 582                flight_price(Code, Here, Next, Sample, Price),
- 583                note_explored(Here, Next),
- 584                path_cost(Pref, [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs], C) ),
- 585              Longer),
- 586      append(Longer, Rest, Queue),
- 587      bf(Queue, To, Pref, K, Routes).
- 588  visit(_, Rest, To, Pref, K, Routes) :-
- 589      bf(Rest, To, Pref, K, Routes).
- 590  
- 591  best_flights(From, To, Pref, Best) :- flight_memo(From, To, Pref, Best), !.
- 592  best_flights(From, To, Pref, Best) :-
- 593      best_routes(From, To, Pref, 2, Best),
- 594      assertz(flight_memo(From, To, Pref, Best)).
- 595  
- 596  compare_search(From, To, Pref, DF, BF) :-
- 597      reset_search,
- 598      findall(K - L, (fly(From, To, L), \+ L = [], flight_key(Pref, L, K)), Pairs),
- 599      insort(Pairs, _),
- 600      steps(DF),
- 601      reset_search,
- 602      best_routes(From, To, Pref, 2, _),
- 603      steps(BF).
- 604  
- 605  clear_live :- retract(live_fare(_, _, _)), fail.
- 606  clear_live :- retract(live_departure(_, _)), fail.
- 607  clear_live.
- 608  
- 609  linked(A, B, Mode, Price, Minutes) :- ground(A, B, Mode, Price, Minutes).
- 610  linked(A, B, Mode, Price, Minutes) :- ground(B, A, Mode, Price, Minutes).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 559      bf([r(0, From, start, [From], [])], To, Pref, K, Routes).
+ 560  
+ 561  bf(_, _, _, 0, []) :- !.
+ 562  bf([], _, _, _, []) :- !.
+ 563  bf(Queue, To, Pref, K, Routes) :-
+ 564      shortest(Queue, Best, Rest),
+ 565      visit(Best, Rest, To, Pref, K, Routes).
+ 566  
+ 567  visit(r(_, To, _, _, Legs), Rest, To, Pref, K, [Route | More]) :-
+ 568      \+ Legs = [], !,
+ 569      rev(Legs, Route),
+ 570      K1 is K - 1,
+ 571      bf(Rest, To, Pref, K1, More).
+ 572  visit(r(_, Here, Clock, Seen, Legs), Rest, To, Pref, K, Routes) :-
+ 573      opt(max_flights, Max),
+ 574      listlen(Legs, N), N &lt; Max, !,
+ 575      findall(r(C, Next, landed(Arr), [Next | Seen], [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs]),
+ 576              ( flight(Code, Here, Next, Timetable, Minutes, Sample),
+ 577                \+ member(Next, Seen),
+ 578                \+ back_to_thailand(Here, Next, To),
+ 579                \+ bad_thai_hop(Here, Next, To),
+ 580                airline_ok(Code, Here, Next),
+ 581                departs(Code, Timetable, HHMM),
+ 582                daytime_ok(HHMM),
+ 583                departure(Clock, Here, HHMM, Dep, Wait),
+ 584                Arr is Dep + Minutes,
+ 585                flight_price(Code, Here, Next, Sample, Price),
+ 586                note_explored(Here, Next),
+ 587                path_cost(Pref, [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs], C) ),
+ 588              Longer),
+ 589      append(Longer, Rest, Queue),
+ 590      bf(Queue, To, Pref, K, Routes).
+ 591  visit(_, Rest, To, Pref, K, Routes) :-
+ 592      bf(Rest, To, Pref, K, Routes).
+ 593  
+ 594  best_flights(From, To, Pref, Best) :- flight_memo(From, To, Pref, Best), !.
+ 595  best_flights(From, To, Pref, Best) :-
+ 596      best_routes(From, To, Pref, 2, Best),
+ 597      assertz(flight_memo(From, To, Pref, Best)).
+ 598  
+ 599  compare_search(From, To, Pref, DF, BF) :-
+ 600      reset_search,
+ 601      findall(K - L, (fly(From, To, L), \+ L = [], flight_key(Pref, L, K)), Pairs),
+ 602      insort(Pairs, _),
+ 603      steps(DF),
+ 604      reset_search,
+ 605      best_routes(From, To, Pref, 2, _),
+ 606      steps(BF).
+ 607  
+ 608  clear_live :- retract(live_fare(_, _, _)), fail.
+ 609  clear_live :- retract(live_departure(_, _)), fail.
+ 610  clear_live.
  611  
- 612  tour(Start, Max, [Start | Cities], Moves) :- tour(Start, Max, [Start], Cities, Moves).
- 613  
- 614  round_tour(Start, Max, Cities, Moves) :- tour(Start, Max, Cities, Moves).
- 615  round_tour(Start, Max, Cities1, Moves1) :-
- 616      tour(Start, Max, Cities, Moves),
- 617      listlen(Cities, K), K &gt;= 2,
- 618      last_elem(Cities, Last),
- 619      linked(Last, Start, Mode, Price, Minutes),
- 620      ground_ok(Mode),
- 621      append(Cities, [Start], Cities1),
- 622      append(Moves, [move(Last, Start, Mode, Price, Minutes)], Moves1).
- 623  
- 624  tour(_, _, _, [], []).
- 625  tour(Here, Max, Trail, [Next | Cities], [move(Here, Next, Mode, Price, Minutes) | Moves]) :-
- 626      listlen(Trail, N),
- 627      N &lt; Max,
- 628      linked(Here, Next, Mode, Price, Minutes),
- 629      ground_ok(Mode),
- 630      \+ member(Next, Trail),
- 631      tour(Next, Max, [Next | Trail], Cities, Moves).
- 632  
- 633  % ===========================================================================
- 634  % 5. PLANNING — days, activities and money
- 635  % ===========================================================================
- 636  
- 637  likes(Cat, Interests) :- member(Cat, Interests).
- 638  </pre>
+ 612  linked(A, B, Mode, Price, Minutes) :- ground(A, B, Mode, Price, Minutes).
+ 613  linked(A, B, Mode, Price, Minutes) :- ground(B, A, Mode, Price, Minutes).
+ 614  
+ 615  tour(Start, Max, [Start | Cities], Moves) :- tour(Start, Max, [Start], Cities, Moves).
+ 616  
+ 617  round_tour(Start, Max, Cities, Moves) :- tour(Start, Max, Cities, Moves).
+ 618  round_tour(Start, Max, Cities1, Moves1) :-
+ 619      tour(Start, Max, Cities, Moves),
+ 620      listlen(Cities, K), K &gt;= 2,</pre>
           </div>
           <div class="page-num">17</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 639  matches(City, Interests, N) :-
- 640      findall(x, (attraction(City, _, Cat, _, _), likes(Cat, Interests)), Xs),
- 641      listlen(Xs, N).
- 642  
- 643  matching_categories(City, Interests, Cats) :-
- 644      findall(Cat, (attraction(City, _, Cat, _, _), likes(Cat, Interests)), Cs),
- 645      no_dups(Cs, Cats).
- 646  
- 647  pick(City, Interests, Used, Hours, Acts, Used1) :-
- 648      findall(act(Name, Cat, Fee, H),
- 649              (attraction(City, Name, Cat, Fee, H), likes(Cat, Interests), \+ member(Name, Used)),
- 650              Liked),
- 651      findall(act(Name, Cat, Fee, H),
- 652              (attraction(City, Name, Cat, Fee, H), \+ likes(Cat, Interests), \+ member(Name, Used)),
- 653              Others),
- 654      append(Liked, Others, Candidates),
- 655      fit(Candidates, Hours, 3, Acts),
- 656      act_names(Acts, Names),
- 657      append(Used, Names, Used1).
- 658  
- 659  fit([], _, _, []).
- 660  fit(_, _, 0, []) :- !.
- 661  fit([act(N, C, F, H) | As], Hours, Max, [act(N, C, F, H) | Rest]) :-
- 662      H =&lt; Hours, !,
- 663      Hours1 is Hours - H, Max1 is Max - 1,
- 664      fit(As, Hours1, Max1, Rest).
- 665  fit([_ | As], Hours, Max, Rest) :- fit(As, Hours, Max, Rest).
- 666  
- 667  act_names([], []).
- 668  act_names([act(N, _, _, _) | As], [N | Ns]) :- act_names(As, Ns).
- 669  
- 670  arrival_hours(Clock, H) :- H0 is (1260 - Clock - 60) // 60, clamp(H0, 0, 8, H).
- 671  leaving_hours(Clock, H) :- H0 is (Clock - 180 - 540) // 60, clamp(H0, 0, 6, H).
- 672  moving_hours(Minutes, H) :- H0 is 8 - (Minutes + 59) // 60, clamp(H0, 0, 8, H).
- 673  
- 674  % ---------------------------------------------------------------------------
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 621      last_elem(Cities, Last),
+ 622      linked(Last, Start, Mode, Price, Minutes),
+ 623      ground_ok(Mode),
+ 624      append(Cities, [Start], Cities1),
+ 625      append(Moves, [move(Last, Start, Mode, Price, Minutes)], Moves1).
+ 626  
+ 627  tour(_, _, _, [], []).
+ 628  tour(Here, Max, Trail, [Next | Cities], [move(Here, Next, Mode, Price, Minutes) | Moves]) :-
+ 629      listlen(Trail, N),
+ 630      N &lt; Max,
+ 631      linked(Here, Next, Mode, Price, Minutes),
+ 632      ground_ok(Mode),
+ 633      \+ member(Next, Trail),
+ 634      tour(Next, Max, [Next | Trail], Cities, Moves).
+ 635  
+ 636  %PLANNING — days, activities and money
+ 637  
+ 638  likes(Cat, Interests) :- member(Cat, Interests).
+ 639  
+ 640  matches(City, Interests, N) :-
+ 641      findall(x, (attraction(City, _, Cat, _, _), likes(Cat, Interests)), Xs),
+ 642      listlen(Xs, N).
+ 643  
+ 644  matching_categories(City, Interests, Cats) :-
+ 645      findall(Cat, (attraction(City, _, Cat, _, _), likes(Cat, Interests)), Cs),
+ 646      no_dups(Cs, Cats).
+ 647  
+ 648  pick(City, Interests, Used, Hours, Acts, Used1) :-
+ 649      findall(act(Name, Cat, Fee, H),
+ 650              (attraction(City, Name, Cat, Fee, H), likes(Cat, Interests), \+ member(Name, Used)),
+ 651              Liked),
+ 652      findall(act(Name, Cat, Fee, H),
+ 653              (attraction(City, Name, Cat, Fee, H), \+ likes(Cat, Interests), \+ member(Name, Used)),
+ 654              Others),
+ 655      append(Liked, Others, Candidates),
+ 656      fit(Candidates, Hours, 3, Acts),
+ 657      act_names(Acts, Names),
+ 658      append(Used, Names, Used1).
+ 659  
+ 660  fit([], _, _, []).
+ 661  fit(_, _, 0, []) :- !.
+ 662  fit([act(N, C, F, H) | As], Hours, Max, [act(N, C, F, H) | Rest]) :-
+ 663      H =&lt; Hours, !,
+ 664      Hours1 is Hours - H, Max1 is Max - 1,
+ 665      fit(As, Hours1, Max1, Rest).
+ 666  fit([_ | As], Hours, Max, Rest) :- fit(As, Hours, Max, Rest).
+ 667  
+ 668  act_names([], []).
+ 669  act_names([act(N, _, _, _) | As], [N | Ns]) :- act_names(As, Ns).
+ 670  
+ 671  arrival_hours(Clock, H) :- H0 is (1260 - Clock - 60) // 60, clamp(H0, 0, 8, H).
+ 672  leaving_hours(Clock, H) :- H0 is (Clock - 180 - 540) // 60, clamp(H0, 0, 6, H).
+ 673  moving_hours(Minutes, H) :- H0 is 8 - (Minutes + 59) // 60, clamp(H0, 0, 8, H).
+ 674  
  675  % Sharing the days between cities
- 676  % ---------------------------------------------------------------------------
- 677  
- 678  range_for(City, _, 1, 1) :- gateway(City), !.
- 679  range_for(City, Seen, 1, 2) :- member(City, Seen), !.
- 680  range_for(City, _, Min, Max) :- stay_range(City, Min, Max).
- 681  
- 682  pace_min(packed, Min, _, M) :- !, M0 is Min - 1, at_least(1, M0, M).
- 683  pace_min(relaxed, Min, Max, M) :- !, M0 is Min + 1, at_most(Max, M0, M).
- 684  pace_min(_, Min, _, Min).
- 685  
- 686  at_least(Lo, X, Lo) :- X &lt; Lo, !.
- 687  at_least(_, X, X).
- 688  at_most(Hi, X, Hi) :- X &gt; Hi, !.
- 689  at_most(_, X, X).
- 690  
- 691  starts([], _, _, []).
- 692  starts([C | Cs], Pace, Seen, [s(C, M, Max) | Ss]) :-
- 693      range_for(C, Seen, Min, Max),
- 694      pace_min(Pace, Min, Max, M),
- 695      starts(Cs, Pace, [C | Seen], Ss).
- 696  
- 697  days_used([], 0).
- 698  days_used([s(_, D, _) | Ss], T) :- days_used(Ss, T0), T is T0 + D.
- 699  
- 700  share_days(Cities, Pace, CityDays, Shares) :-
- 701      starts(Cities, Pace, [], S0),
- 702      days_used(S0, Used),</pre>
+ 676  
+ 677  range_for(City, _, 1, 1) :- gateway(City), !.
+ 678  range_for(City, Seen, 1, 2) :- member(City, Seen), !.
+ 679  range_for(City, _, Min, Max) :- stay_range(City, Min, Max).
+ 680  
+ 681  pace_min(packed, Min, _, M) :- !, M0 is Min - 1, at_least(1, M0, M).
+ 682  pace_min(relaxed, Min, Max, M) :- !, M0 is Min + 1, at_most(Max, M0, M).</pre>
           </div>
           <div class="page-num">18</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 703      Spare is CityDays - Used,
- 704      Spare &gt;= 0,
- 705      add_days(Spare, S0, S1),
- 706      as_pairs(S1, Shares).
- 707  
- 708  add_days(0, S, S) :- !.
- 709  add_days(N, S0, S) :-
- 710      roomiest(S0, 1, 0, 0, Pos), !,
- 711      bump(S0, Pos, S1),
- 712      N1 is N - 1,
- 713      add_days(N1, S1, S).
- 714  add_days(1, S0, S) :-
- 715      biggest(S0, 1, 0, 0, Pos),
- 716      bump(S0, Pos, S).
- 717  
- 718  roomiest([], _, Room, Pos, Pos) :- Room &gt; 0.
- 719  roomiest([s(_, D, Max) | Ss], I, Best, _, Pos) :-
- 720      Room is Max - D, Room &gt; Best, !,
- 721      I1 is I + 1, roomiest(Ss, I1, Room, I, Pos).
- 722  roomiest([_ | Ss], I, Best, BestPos, Pos) :-
- 723      I1 is I + 1, roomiest(Ss, I1, Best, BestPos, Pos).
- 724  
- 725  biggest([], _, _, Pos, Pos).
- 726  biggest([s(_, _, Max) | Ss], I, Best, _, Pos) :-
- 727      Max &gt; Best, !,
- 728      I1 is I + 1, biggest(Ss, I1, Max, I, Pos).
- 729  biggest([_ | Ss], I, Best, BestPos, Pos) :-
- 730      I1 is I + 1, biggest(Ss, I1, Best, BestPos, Pos).
- 731  
- 732  bump([s(C, D, M) | Ss], 1, [s(C, D1, M) | Ss]) :- !, D1 is D + 1.
- 733  bump([X | Ss], Pos, [X | Rest]) :- Pos1 is Pos - 1, bump(Ss, Pos1, Rest).
- 734  
- 735  as_pairs([], []).
- 736  as_pairs([s(C, D, _) | Ss], [C - D | Ps]) :- as_pairs(Ss, Ps).
- 737  
- 738  build_plan(Home, Country, Days, People, Interests, Pace, Out, Cities, Moves, Ret,
- 739             plan(Country, Out, Cities, Moves, Ret, DayList, costs(Fl, Gr, Ho, Da, Fe, Total),
- 740                  meta(Rooms, Nights, Landed, FlightMin, Enjoy, Free))) :-
- 741      last_elem(Out, leg(_, _, First, _, Arr, _, _)),
- 742      local_time(First, Arr, LandDay, LandClock),
- 743      Landed is LandDay + 1,
- 744      CityDays is Days - Landed,
- 745      CityDays &gt;= 1,
- 746      share_days(Cities, Pace, CityDays, Shares),
- 747      arrival_hours(LandClock, ArrHours),
- 748      Ret = [leg(_, Last, _, RetDep, _, _, _) | _],
- 749      local_time(Last, RetDep, _, RetClock),
- 750      leaving_hours(RetClock, LeaveHours),
- 751      flight_days(Home, Out, Landed, FlightDays),
- 752      city_days(Shares, Moves, Landed, ArrHours, Interests, [], CityDays0, Used),
- 753      same_day_landing(Landed, Out, CityDays0, CityDayList),
- 754      pick(Last, Interests, Used, LeaveHours, LastActs, _),
- 755      append(FlightDays, CityDayList, D1),
- 756      append(D1, [day(Days, home, Last, flights(Ret), LastActs)], DayList),
- 757      legs_price(Out, P1), legs_price(Ret, P2),
- 758      Fl is (P1 + P2) * People,
- 759      moves_price(Moves, MP), Gr is MP * People,
- 760      Rooms is (People + 1) // 2,
- 761      hotel_cost(CityDayList, 0, H0),
- 762      on_board(Moves, Saved, OnBoard),
- 763      H is H0 - Saved, Ho is H * Rooms,
- 764      Nights is Days - Landed - OnBoard,
- 765      country(Country, _, _, Daily), Da is Daily * People * CityDays,
- 766      fees(DayList, F), Fe is F * People,</pre>
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 683  pace_min(_, Min, _, Min).
+ 684  
+ 685  at_least(Lo, X, Lo) :- X &lt; Lo, !.
+ 686  at_least(_, X, X).
+ 687  at_most(Hi, X, Hi) :- X &gt; Hi, !.
+ 688  at_most(_, X, X).
+ 689  
+ 690  starts([], _, _, []).
+ 691  starts([C | Cs], Pace, Seen, [s(C, M, Max) | Ss]) :-
+ 692      range_for(C, Seen, Min, Max),
+ 693      pace_min(Pace, Min, Max, M),
+ 694      starts(Cs, Pace, [C | Seen], Ss).
+ 695  
+ 696  days_used([], 0).
+ 697  days_used([s(_, D, _) | Ss], T) :- days_used(Ss, T0), T is T0 + D.
+ 698  
+ 699  share_days(Cities, Pace, CityDays, Shares) :-
+ 700      starts(Cities, Pace, [], S0),
+ 701      days_used(S0, Used),
+ 702      Spare is CityDays - Used,
+ 703      Spare &gt;= 0,
+ 704      add_days(Spare, S0, S1),
+ 705      as_pairs(S1, Shares).
+ 706  
+ 707  add_days(0, S, S) :- !.
+ 708  add_days(N, S0, S) :-
+ 709      roomiest(S0, 1, 0, 0, Pos), !,
+ 710      bump(S0, Pos, S1),
+ 711      N1 is N - 1,
+ 712      add_days(N1, S1, S).
+ 713  add_days(1, S0, S) :-
+ 714      biggest(S0, 1, 0, 0, Pos),
+ 715      bump(S0, Pos, S).
+ 716  
+ 717  roomiest([], _, Room, Pos, Pos) :- Room &gt; 0.
+ 718  roomiest([s(_, D, Max) | Ss], I, Best, _, Pos) :-
+ 719      Room is Max - D, Room &gt; Best, !,
+ 720      I1 is I + 1, roomiest(Ss, I1, Room, I, Pos).
+ 721  roomiest([_ | Ss], I, Best, BestPos, Pos) :-
+ 722      I1 is I + 1, roomiest(Ss, I1, Best, BestPos, Pos).
+ 723  
+ 724  biggest([], _, _, Pos, Pos).
+ 725  biggest([s(_, _, Max) | Ss], I, Best, _, Pos) :-
+ 726      Max &gt; Best, !,
+ 727      I1 is I + 1, biggest(Ss, I1, Max, I, Pos).
+ 728  biggest([_ | Ss], I, Best, BestPos, Pos) :-
+ 729      I1 is I + 1, biggest(Ss, I1, Best, BestPos, Pos).
+ 730  
+ 731  bump([s(C, D, M) | Ss], 1, [s(C, D1, M) | Ss]) :- !, D1 is D + 1.
+ 732  bump([X | Ss], Pos, [X | Rest]) :- Pos1 is Pos - 1, bump(Ss, Pos1, Rest).
+ 733  
+ 734  as_pairs([], []).
+ 735  as_pairs([s(C, D, _) | Ss], [C - D | Ps]) :- as_pairs(Ss, Ps).
+ 736  
+ 737  build_plan(Home, Country, Days, People, Interests, Pace, Out, Cities, Moves, Ret,
+ 738             plan(Country, Out, Cities, Moves, Ret, DayList, costs(Fl, Gr, Ho, Da, Fe, Total),
+ 739                  meta(Rooms, Nights, Landed, FlightMin, Enjoy, Free))) :-
+ 740      last_elem(Out, leg(_, _, First, _, Arr, _, _)),
+ 741      local_time(First, Arr, LandDay, LandClock),
+ 742      Landed is LandDay + 1,
+ 743      CityDays is Days - Landed,
+ 744      CityDays &gt;= 1,</pre>
           </div>
           <div class="page-num">19</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 767      Total is Fl + Gr + Ho + Da + Fe,
- 768      legs_minutes(Out, M1), legs_minutes(Ret, M2), FlightMin is M1 + M2,
- 769      enjoyment(DayList, Interests, Enjoy),
- 770      free_days(DayList, Free).
- 771  
- 772  free_days(Days, N) :- findall(x, member(day(_, free, _, _, _), Days), Xs), listlen(Xs, N).
- 773  
- 774  flight_days(_, _, 1, []) :- !.
- 775  flight_days(Home, Out, Landed, [day(1, fly, Home, flights(Out), []) | Air]) :-
- 776      in_air(2, Landed, Air).
- 777  
- 778  same_day_landing(1, Out, [day(1, arrive, City, none, Acts) | Ds], [day(1, arrive, City, flights(Out), Acts) | Ds]) :- !.
- 779  same_day_landing(_, _, Ds, Ds).
- 780  
- 781  in_air(N, Landed, []) :- N &gt;= Landed, !.
- 782  in_air(N, Landed, [day(N, air, none, none, []) | Rest]) :- N1 is N + 1, in_air(N1, Landed, Rest).
- 783  
- 784  city_days([], _, _, _, _, Used, [], Used).
- 785  city_days([City - D | Shares], Moves, N, Hours, Interests, Used0, Days, Used) :-
- 786      stay_days(City, D, N, Hours, first, Interests, Used0, Here, N1, Used1),
- 787      next_city(Moves, Shares, Moves1, Hours1),
- 788      city_days(Shares, Moves1, N1, Hours1, Interests, Used1, Later, Used),
- 789      append(Here, Later, Days).
- 790  
- 791  next_city([move(_, _, Mode, _, _) | Ms], _, Ms, 7) :- overnight(Mode), !.
- 792  next_city([move(_, _, _, _, Min) | Ms], _, Ms, Hours) :- !, moving_hours(Min, Hours).
- 793  next_city(Ms, _, Ms, 8).
- 794  
- 795  stay_days(_, 0, N, _, _, _, Used, [], N, Used) :- !.
- 796  stay_days(City, D, N, Hours, Kind, Interests, Used0, [day(N, Kind1, City, Travel, Acts) | Days], NOut, Used) :-
- 797      pick(City, Interests, Used0, Hours, Acts, Used1),
- 798      day_kind(Kind, Acts, Kind1, Travel),
- 799      D1 is D - 1, N1 is N + 1,
- 800      stay_days(City, D1, N1, 8, later, Interests, Used1, Days, NOut, Used).
- 801  
- 802  day_kind(first, _, arrive, none).
- 803  day_kind(later, [], free, none) :- !.
- 804  day_kind(later, _, explore, none).
- 805  
- 806  attach_moves(Days, Moves, Out) :- attach(Days, first, Moves, Out).
- 807  
- 808  attach([], _, _, []).
- 809  attach([day(N, arrive, City, T, A) | Ds], first, Ms, [day(N, arrive, City, T, A) | Rest]) :- !,
- 810      attach(Ds, later, Ms, Rest).
- 811  attach([day(N, arrive, City, none, A) | Ds], later, [move(F, City, M, P, Min) | Ms],
- 812         [day(N, move, City, ground(F, City, M, P, Min), A) | Rest]) :- !,
- 813      attach(Ds, later, Ms, Rest).
- 814  attach([D | Ds], Flag, Ms, [D | Rest]) :- attach(Ds, Flag, Ms, Rest).
- 815  
- 816  moves_price([], 0).
- 817  moves_price([move(_, _, _, P, _) | Ms], T) :- moves_price(Ms, T0), T is T0 + P.
- 818  
- 819  on_board(Moves, Saved, N) :-
- 820      findall(P, (member(move(From, _, Mode, _, _), Moves), overnight(Mode), room_price(From, P)), Ps),
- 821      sum(Ps, Saved),
- 822      listlen(Ps, N).
- 823  
- 824  hotel_cost([], T, T).
- 825  hotel_cost([day(_, _, City, _, _) | Ds], T0, T) :-
- 826      room_price(City, P), T1 is T0 + P, hotel_cost(Ds, T1, T).
- 827  
- 828  fees(Days, Total) :- findall(F, (member(day(_, _, _, _, Acts), Days), member(act(_, _, F, _), Acts)), Fs), sum(Fs, Total).
- 829  
- 830  sum([], 0).</pre>
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 745      share_days(Cities, Pace, CityDays, Shares),
+ 746      arrival_hours(LandClock, ArrHours),
+ 747      Ret = [leg(_, Last, _, RetDep, _, _, _) | _],
+ 748      local_time(Last, RetDep, _, RetClock),
+ 749      leaving_hours(RetClock, LeaveHours),
+ 750      flight_days(Home, Out, Landed, FlightDays),
+ 751      city_days(Shares, Moves, Landed, ArrHours, Interests, [], CityDays0, Used),
+ 752      same_day_landing(Landed, Out, CityDays0, CityDayList),
+ 753      pick(Last, Interests, Used, LeaveHours, LastActs, _),
+ 754      append(FlightDays, CityDayList, D1),
+ 755      append(D1, [day(Days, home, Last, flights(Ret), LastActs)], DayList),
+ 756      legs_price(Out, P1), legs_price(Ret, P2),
+ 757      Fl is (P1 + P2) * People,
+ 758      moves_price(Moves, MP), Gr is MP * People,
+ 759      Rooms is (People + 1) // 2,
+ 760      hotel_cost(CityDayList, 0, H0),
+ 761      on_board(Moves, Saved, OnBoard),
+ 762      H is H0 - Saved, Ho is H * Rooms,
+ 763      Nights is Days - Landed - OnBoard,
+ 764      country(Country, _, _, Daily), Da is Daily * People * CityDays,
+ 765      fees(DayList, F), Fe is F * People,
+ 766      Total is Fl + Gr + Ho + Da + Fe,
+ 767      legs_minutes(Out, M1), legs_minutes(Ret, M2), FlightMin is M1 + M2,
+ 768      enjoyment(DayList, Interests, Enjoy),
+ 769      free_days(DayList, Free).
+ 770  
+ 771  free_days(Days, N) :- findall(x, member(day(_, free, _, _, _), Days), Xs), listlen(Xs, N).
+ 772  
+ 773  flight_days(_, _, 1, []) :- !.
+ 774  flight_days(Home, Out, Landed, [day(1, fly, Home, flights(Out), []) | Air]) :-
+ 775      in_air(2, Landed, Air).
+ 776  
+ 777  same_day_landing(1, Out, [day(1, arrive, City, none, Acts) | Ds], [day(1, arrive, City, flights(Out), Acts) | Ds]) :- !.
+ 778  same_day_landing(_, _, Ds, Ds).
+ 779  
+ 780  in_air(N, Landed, []) :- N &gt;= Landed, !.
+ 781  in_air(N, Landed, [day(N, air, none, none, []) | Rest]) :- N1 is N + 1, in_air(N1, Landed, Rest).
+ 782  
+ 783  city_days([], _, _, _, _, Used, [], Used).
+ 784  city_days([City - D | Shares], Moves, N, Hours, Interests, Used0, Days, Used) :-
+ 785      stay_days(City, D, N, Hours, first, Interests, Used0, Here, N1, Used1),
+ 786      next_city(Moves, Shares, Moves1, Hours1),
+ 787      city_days(Shares, Moves1, N1, Hours1, Interests, Used1, Later, Used),
+ 788      append(Here, Later, Days).
+ 789  
+ 790  next_city([move(_, _, Mode, _, _) | Ms], _, Ms, 7) :- overnight(Mode), !.
+ 791  next_city([move(_, _, _, _, Min) | Ms], _, Ms, Hours) :- !, moving_hours(Min, Hours).
+ 792  next_city(Ms, _, Ms, 8).
+ 793  
+ 794  stay_days(_, 0, N, _, _, _, Used, [], N, Used) :- !.
+ 795  stay_days(City, D, N, Hours, Kind, Interests, Used0, [day(N, Kind1, City, Travel, Acts) | Days], NOut, Used) :-
+ 796      pick(City, Interests, Used0, Hours, Acts, Used1),
+ 797      day_kind(Kind, Acts, Kind1, Travel),
+ 798      D1 is D - 1, N1 is N + 1,
+ 799      stay_days(City, D1, N1, 8, later, Interests, Used1, Days, NOut, Used).
+ 800  
+ 801  day_kind(first, _, arrive, none).
+ 802  day_kind(later, [], free, none) :- !.
+ 803  day_kind(later, _, explore, none).
+ 804  
+ 805  attach_moves(Days, Moves, Out) :- attach(Days, first, Moves, Out).
+ 806  </pre>
           </div>
           <div class="page-num">20</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 831  sum([X | Xs], T) :- sum(Xs, T0), T is T0 + X.
- 832  
- 833  enjoyment(Days, Interests, E) :-
- 834      findall(x, (member(day(_, _, _, _, Acts), Days), member(act(_, Cat, _, _), Acts), likes(Cat, Interests)), Xs),
- 835      listlen(Xs, E).
- 836  
- 837  % ===========================================================================
- 838  % 6. RANKING
- 839  % ===========================================================================
- 840  
- 841  plan_total(plan(_, _, _, _, _, _, costs(_, _, _, _, _, T), _), T).
- 842  
- 843  plan_key(cheapest, P, K) :- plan_total(P, K).
- 844  plan_key(fastest, P, K) :-
- 845      P = plan(_, _, _, _, _, _, _, meta(_, _, _, Min, _, _)), plan_total(P, T), K is Min * 1000 + T.
- 846  plan_key(fewest, P, K) :-
- 847      P = plan(_, Out, _, _, Ret, _, _, _), listlen(Out, A), listlen(Ret, B),
- 848      plan_total(P, T), K is (A + B) * 10000000 + T.
- 849  plan_key(balanced, P, K) :-
- 850      P = plan(_, _, _, _, _, _, _, meta(_, _, _, Min, Enjoy, _)), plan_total(P, T),
- 851      K is T + Min * 10 - Enjoy * 1500.
- 852  
- 853  score(Pref, P, K) :-
- 854      plan_key(Pref, P, K0),
- 855      P = plan(_, _, _, _, _, Days, costs(_, _, _, _, _, T), meta(_, _, _, _, _, Free)),
- 856      listlen(Days, N),
- 857      K is K0 + Free * T // N.
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 807  attach([], _, _, []).
+ 808  attach([day(N, arrive, City, T, A) | Ds], first, Ms, [day(N, arrive, City, T, A) | Rest]) :- !,
+ 809      attach(Ds, later, Ms, Rest).
+ 810  attach([day(N, arrive, City, none, A) | Ds], later, [move(F, City, M, P, Min) | Ms],
+ 811         [day(N, move, City, ground(F, City, M, P, Min), A) | Rest]) :- !,
+ 812      attach(Ds, later, Ms, Rest).
+ 813  attach([D | Ds], Flag, Ms, [D | Rest]) :- attach(Ds, Flag, Ms, Rest).
+ 814  
+ 815  moves_price([], 0).
+ 816  moves_price([move(_, _, _, P, _) | Ms], T) :- moves_price(Ms, T0), T is T0 + P.
+ 817  
+ 818  on_board(Moves, Saved, N) :-
+ 819      findall(P, (member(move(From, _, Mode, _, _), Moves), overnight(Mode), room_price(From, P)), Ps),
+ 820      sum(Ps, Saved),
+ 821      listlen(Ps, N).
+ 822  
+ 823  hotel_cost([], T, T).
+ 824  hotel_cost([day(_, _, City, _, _) | Ds], T0, T) :-
+ 825      room_price(City, P), T1 is T0 + P, hotel_cost(Ds, T1, T).
+ 826  
+ 827  fees(Days, Total) :- findall(F, (member(day(_, _, _, _, Acts), Days), member(act(_, _, F, _), Acts)), Fs), sum(Fs, Total).
+ 828  
+ 829  sum([], 0).
+ 830  sum([X | Xs], T) :- sum(Xs, T0), T is T0 + X.
+ 831  
+ 832  enjoyment(Days, Interests, E) :-
+ 833      findall(x, (member(day(_, _, _, _, Acts), Days), member(act(_, Cat, _, _), Acts), likes(Cat, Interests)), Xs),
+ 834      listlen(Xs, E).
+ 835  
+ 836  %RANKING
+ 837  
+ 838  plan_total(plan(_, _, _, _, _, _, costs(_, _, _, _, _, T), _), T).
+ 839  
+ 840  plan_key(cheapest, P, K) :- plan_total(P, K).
+ 841  plan_key(fastest, P, K) :-
+ 842      P = plan(_, _, _, _, _, _, _, meta(_, _, _, Min, _, _)), plan_total(P, T), K is Min * 1000 + T.
+ 843  plan_key(fewest, P, K) :-
+ 844      P = plan(_, Out, _, _, Ret, _, _, _), listlen(Out, A), listlen(Ret, B),
+ 845      plan_total(P, T), K is (A + B) * 10000000 + T.
+ 846  plan_key(balanced, P, K) :-
+ 847      P = plan(_, _, _, _, _, _, _, meta(_, _, _, Min, Enjoy, _)), plan_total(P, T),
+ 848      K is T + Min * 10 - Enjoy * 1500.
+ 849  
+ 850  score(Pref, P, K) :-
+ 851      plan_key(Pref, P, K0),
+ 852      P = plan(_, _, _, _, _, Days, costs(_, _, _, _, _, T), meta(_, _, _, _, _, Free)),
+ 853      listlen(Days, N),
+ 854      K is K0 + Free * T // N.
+ 855  
+ 856  rank(Pref, Plans, Ranked) :-
+ 857      keyed(Pref, Plans, Pairs), insort(Pairs, Sorted), values(Sorted, Ranked).
  858  
- 859  rank(Pref, Plans, Ranked) :-
- 860      keyed(Pref, Plans, Pairs), insort(Pairs, Sorted), values(Sorted, Ranked).
+ 859  keyed(_, [], []).
+ 860  keyed(Pref, [P | Ps], [K - P | KPs]) :- score(Pref, P, K), keyed(Pref, Ps, KPs).
  861  
- 862  keyed(_, [], []).
- 863  keyed(Pref, [P | Ps], [K - P | KPs]) :- score(Pref, P, K), keyed(Pref, Ps, KPs).
- 864  
- 865  best_plan(Pref, [P | Ps], Best) :- score(Pref, P, K), best_plan(Pref, Ps, K, P, Best).
- 866  best_plan(_, [], _, Best, Best).
- 867  best_plan(Pref, [P | Ps], K0, _, Best) :-
- 868      score(Pref, P, K), K &lt; K0, !, best_plan(Pref, Ps, K, P, Best).
- 869  best_plan(Pref, [_ | Ps], K0, B0, Best) :- best_plan(Pref, Ps, K0, B0, Best).
- 870  
- 871  affordable(_, [], []).
- 872  affordable(Budget, [P | Ps], [P | As]) :- plan_total(P, T), T =&lt; Budget, !, affordable(Budget, Ps, As).
- 873  affordable(Budget, [_ | Ps], As) :- affordable(Budget, Ps, As).
- 874  
- 875  different(_, [], []).
- 876  different(0, _, []) :- !.
- 877  different(N, [P | Ps], [P | Rest]) :-
- 878      P = plan(_, _, Cities, _, _, _, _, _),
- 879      drop_same(Ps, Cities, Ps1),
- 880      N1 is N - 1,
- 881      different(N1, Ps1, Rest).
- 882  
- 883  drop_same([], _, []).
- 884  drop_same([plan(_, _, Cities, _, _, _, _, _) | Ps], Cities, Rest) :- !, drop_same(Ps, Cities, Rest).
- 885  drop_same([P | Ps], Cities, [P | Rest]) :- drop_same(Ps, Cities, Rest).
- 886  
- 887  in_country(Country, plan(Country, _, _, _, _, _, _, _)).
- 888  
- 889  country_plans(_, [], []).
- 890  country_plans(C, [P | Ps], [P | Rest]) :- in_country(C, P), !, country_plans(C, Ps, Rest).
- 891  country_plans(C, [_ | Ps], Rest) :- country_plans(C, Ps, Rest).
- 892  
- 893  best_per_country(_, [], _, []).
- 894  best_per_country(Pref, [C | Cs], Plans, [K - Best | Rest]) :-</pre>
+ 862  best_plan(Pref, [P | Ps], Best) :- score(Pref, P, K), best_plan(Pref, Ps, K, P, Best).
+ 863  best_plan(_, [], _, Best, Best).
+ 864  best_plan(Pref, [P | Ps], K0, _, Best) :-
+ 865      score(Pref, P, K), K &lt; K0, !, best_plan(Pref, Ps, K, P, Best).
+ 866  best_plan(Pref, [_ | Ps], K0, B0, Best) :- best_plan(Pref, Ps, K0, B0, Best).
+ 867  
+ 868  affordable(_, [], []).</pre>
           </div>
           <div class="page-num">21</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 895      country_plans(C, Plans, Mine), \+ Mine = [], !,
- 896      best_plan(Pref, Mine, Best),
- 897      plan_total(Best, T),
- 898      Best = plan(_, _, _, _, _, _, _, meta(_, _, _, _, Enjoy, _)),
- 899      K is T - Enjoy * 3000,
- 900      best_per_country(Pref, Cs, Plans, Rest).
- 901  best_per_country(Pref, [_ | Cs], Plans, Rest) :- best_per_country(Pref, Cs, Plans, Rest).
- 902  
- 903  % ===========================================================================
- 904  % 7. REASONS — returned as lists; Python turns them into sentences
- 905  % ===========================================================================
- 906  
- 907  reasons(Dest, Pref, Index, Count, Budget, Days, Month, People, Interests, Plan, Reasons) :-
- 908      Plan = plan(Country, Out, Cities, Moves, Ret, _, costs(_, _, _, _, _, Total), meta(Rooms, _, Landed, _, Enjoy, Free)),
- 909      rank_reason(Dest, Pref, Index, Count, Country, Enjoy, R1),
- 910      budget_reason(Budget, Total, R2),
- 911      flight_reason(out, Out, R3),
- 912      flight_reason(back, Ret, R4),
- 913      free_reason(Free, R5),
- 914      append(Out, Ret, Legs),
- 915      fares_reason(Legs, R6),
- 916      findall(R, estimate_reason(Legs, R), R7a),
- 917      findall(R, option_reason(Cities, R), R7c),
- 918      findall([on_board, Mode, From, To], (member(move(From, To, Mode, _, _), Moves), overnight(Mode)), R7d),
- 919      findall(R, twin_reason(Out, Ret, R), R7e),
- 920      append(R7d, R7e, R7f),
- 921      append(R7c, R7f, R7b),
- 922      append(R7a, R7b, R7),
- 923      findall(R, extra_reason(Country, Days, Month, People, Rooms, Landed, Cities, Interests, R), Rs),
- 924      append([R1, R2, R3, R4, R5, R6], R7, Head),
- 925      append(Head, Rs, Reasons).
- 926  
- 927  twin_reason([leg(_, Home, _, _, _, _, _) | _], Ret, [other_airport, Home, Land]) :-
- 928      last_elem(Ret, leg(_, _, Land, _, _, _, _)),
- 929      twin(Home, Land).
- 930  
- 931  option_reason(_, [max_flights, N]) :- opt(max_flights, N), N &lt; 3.
- 932  option_reason(_, [airlines, A]) :- opt(airlines, A), \+ A = any.
- 933  option_reason(_, [no_night_flights]) :- opt(night_flights, avoid).
- 934  option_reason(_, [hotel, L]) :- opt(hotel, L), \+ L = mid.
- 935  option_reason(_, [your_cities]) :- opt(cities, Ms), \+ Ms = [].
- 936  option_reason(_, [getting_around, G]) :- opt(getting_around, G), \+ G = any.
- 937  option_reason(Cities, [gateway, G]) :- no_dups(Cities, Unique), member(G, Unique), gateway(G).
- 938  
- 939  estimate_reason(Legs, [full_service_estimate, Code]) :-
- 940      member(leg(Code, F, T, _, _, _, _), Legs),
- 941      live_fare(F, T, _), airline(Code, A), \+ low_cost(A), !.
- 942  
- 943  fares_reason(Legs, [live_fares, N, Total]) :-
- 944      findall(x, (member(leg(_, F, T, _, _, _, _), Legs), live_fare(F, T, _)), Xs),
- 945      listlen(Xs, N), N &gt; 0, !,
- 946      listlen(Legs, Total).
- 947  fares_reason(_, [sample_fares]).
- 948  
- 949  free_reason(0, [no_free_days]) :- !.
- 950  free_reason(N, [free_days, N]).
- 951  
- 952  rank_reason(anywhere, _, _, _, Country, Enjoy, [anywhere, Country, Enjoy]) :- !.
- 953  rank_reason(_, Pref, 1, Count, _, _, [best, Pref, Count]) :- !.
- 954  rank_reason(_, _, Index, _, _, _, [alternative, Index]).
- 955  
- 956  budget_reason(Budget, Total, [under_budget, Spare]) :- Total =&lt; Budget, !, Spare is Budget - Total.
- 957  budget_reason(Budget, Total, [over_budget, Over]) :- Over is Total - Budget.
- 958  </pre>
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 869  affordable(Budget, [P | Ps], [P | As]) :- plan_total(P, T), T =&lt; Budget, !, affordable(Budget, Ps, As).
+ 870  affordable(Budget, [_ | Ps], As) :- affordable(Budget, Ps, As).
+ 871  
+ 872  different(_, [], []).
+ 873  different(0, _, []) :- !.
+ 874  different(N, [P | Ps], [P | Rest]) :-
+ 875      P = plan(_, _, Cities, _, _, _, _, _),
+ 876      drop_same(Ps, Cities, Ps1),
+ 877      N1 is N - 1,
+ 878      different(N1, Ps1, Rest).
+ 879  
+ 880  drop_same([], _, []).
+ 881  drop_same([plan(_, _, Cities, _, _, _, _, _) | Ps], Cities, Rest) :- !, drop_same(Ps, Cities, Rest).
+ 882  drop_same([P | Ps], Cities, [P | Rest]) :- drop_same(Ps, Cities, Rest).
+ 883  
+ 884  in_country(Country, plan(Country, _, _, _, _, _, _, _)).
+ 885  
+ 886  country_plans(_, [], []).
+ 887  country_plans(C, [P | Ps], [P | Rest]) :- in_country(C, P), !, country_plans(C, Ps, Rest).
+ 888  country_plans(C, [_ | Ps], Rest) :- country_plans(C, Ps, Rest).
+ 889  
+ 890  best_per_country(_, [], _, []).
+ 891  best_per_country(Pref, [C | Cs], Plans, [K - Best | Rest]) :-
+ 892      country_plans(C, Plans, Mine), \+ Mine = [], !,
+ 893      best_plan(Pref, Mine, Best),
+ 894      plan_total(Best, T),
+ 895      Best = plan(_, _, _, _, _, _, _, meta(_, _, _, _, Enjoy, _)),
+ 896      K is T - Enjoy * 3000,
+ 897      best_per_country(Pref, Cs, Plans, Rest).
+ 898  best_per_country(Pref, [_ | Cs], Plans, Rest) :- best_per_country(Pref, Cs, Plans, Rest).
+ 899  
+ 900  %REASONS 
+ 901  
+ 902  reasons(Dest, Pref, Index, Count, Budget, Days, Month, People, Interests, Plan, Reasons) :-
+ 903      Plan = plan(Country, Out, Cities, Moves, Ret, _, costs(_, _, _, _, _, Total), meta(Rooms, _, Landed, _, Enjoy, Free)),
+ 904      rank_reason(Dest, Pref, Index, Count, Country, Enjoy, R1),
+ 905      budget_reason(Budget, Total, R2),
+ 906      flight_reason(out, Out, R3),
+ 907      flight_reason(back, Ret, R4),
+ 908      free_reason(Free, R5),
+ 909      append(Out, Ret, Legs),
+ 910      fares_reason(Legs, R6),
+ 911      findall(R, estimate_reason(Legs, R), R7a),
+ 912      findall(R, option_reason(Cities, R), R7c),
+ 913      findall([on_board, Mode, From, To], (member(move(From, To, Mode, _, _), Moves), overnight(Mode)), R7d),
+ 914      findall(R, twin_reason(Out, Ret, R), R7e),
+ 915      append(R7d, R7e, R7f),
+ 916      append(R7c, R7f, R7b),
+ 917      append(R7a, R7b, R7),
+ 918      findall(R, extra_reason(Country, Days, Month, People, Rooms, Landed, Cities, Interests, R), Rs),
+ 919      append([R1, R2, R3, R4, R5, R6], R7, Head),
+ 920      append(Head, Rs, Reasons).
+ 921  
+ 922  twin_reason([leg(_, Home, _, _, _, _, _) | _], Ret, [other_airport, Home, Land]) :-
+ 923      last_elem(Ret, leg(_, _, Land, _, _, _, _)),
+ 924      twin(Home, Land).
+ 925  
+ 926  option_reason(_, [max_flights, N]) :- opt(max_flights, N), N &lt; 3.
+ 927  option_reason(_, [airlines, A]) :- opt(airlines, A), \+ A = any.
+ 928  option_reason(_, [no_night_flights]) :- opt(night_flights, avoid).
+ 929  option_reason(_, [hotel, L]) :- opt(hotel, L), \+ L = mid.
+ 930  option_reason(_, [your_cities]) :- opt(cities, Ms), \+ Ms = [].</pre>
           </div>
           <div class="page-num">22</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre"> 959  flight_reason(Way, [leg(Code, From, To, _, _, _, _)], [direct, Way, Code, From, To]) :- !.
- 960  flight_reason(Way, [_, leg(_, Hub, _, _, _, _, Wait) | _], [change, Way, Hub, Wait]).
- 961  
- 962  extra_reason(_, _, _, _, _, Landed, _, _, [overnight]) :- Landed &gt; 1.
- 963  extra_reason(_, _, _, People, Rooms, _, _, _, [rooms, People, Rooms]) :- People &gt; 1.
- 964  extra_reason(_, _, _, _, _, _, Cities, _, [open_jaw, First, Last]) :-
- 965      Cities = [First | _], last_elem(Cities, Last), \+ First = Last.
- 966  extra_reason(_, _, _, _, _, _, Cities, Interests, [city, City, N, Cats]) :-
- 967      no_dups(Cities, Unique),
- 968      member(City, Unique), matches(City, Interests, N), N &gt; 0,
- 969      matching_categories(City, Interests, Cats).
- 970  extra_reason(Country, Days, _, _, _, _, _, _, [visa_ok, Country, Max]) :-
- 971      visa_free(Country, Max), Days =&lt; Max.
- 972  extra_reason(Country, Days, _, _, _, _, _, _, [visa_too_short, Country, Max]) :-
- 973      visa_free(Country, Max), Days &gt; Max.
- 974  extra_reason(Country, _, Month, _, _, _, _, _, [prices, Country, Month, Fly, Stay]) :-
- 975      flight_level(Country, Month, Fly), hotel_level(Country, Month, Stay),
- 976      \+ (Fly =:= 100, Stay =:= 100).
- 977  extra_reason(_, _, Month, _, _, _, _, _, [thai_holiday, Name]) :-
- 978      thai_holiday(Months, _, Name), member(Month, Months).
- 979  extra_reason(Country, _, Month, _, _, _, _, _, [highlight, Country, What]) :-
- 980      highlight(Country, What, Months), member(Month, Months).
- 981  extra_reason(Country, _, Month, _, _, _, _, _, [warning, Country, What]) :-
- 982      warning(Country, What, Months), member(Month, Months).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 931  option_reason(_, [getting_around, G]) :- opt(getting_around, G), \+ G = any.
+ 932  option_reason(Cities, [gateway, G]) :- no_dups(Cities, Unique), member(G, Unique), gateway(G).
+ 933  
+ 934  estimate_reason(Legs, [full_service_estimate, Code]) :-
+ 935      member(leg(Code, F, T, _, _, _, _), Legs),
+ 936      live_fare(F, T, _), airline(Code, A), \+ low_cost(A), !.
+ 937  
+ 938  fares_reason(Legs, [live_fares, N, Total]) :-
+ 939      findall(x, (member(leg(_, F, T, _, _, _, _), Legs), live_fare(F, T, _)), Xs),
+ 940      listlen(Xs, N), N &gt; 0, !,
+ 941      listlen(Legs, Total).
+ 942  fares_reason(_, [sample_fares]).
+ 943  
+ 944  free_reason(0, [no_free_days]) :- !.
+ 945  free_reason(N, [free_days, N]).
+ 946  
+ 947  rank_reason(anywhere, _, _, _, Country, Enjoy, [anywhere, Country, Enjoy]) :- !.
+ 948  rank_reason(_, Pref, 1, Count, _, _, [best, Pref, Count]) :- !.
+ 949  rank_reason(_, _, Index, _, _, _, [alternative, Index]).
+ 950  
+ 951  budget_reason(Budget, Total, [under_budget, Spare]) :- Total =&lt; Budget, !, Spare is Budget - Total.
+ 952  budget_reason(Budget, Total, [over_budget, Over]) :- Over is Total - Budget.
+ 953  
+ 954  flight_reason(Way, [leg(Code, From, To, _, _, _, _)], [direct, Way, Code, From, To]) :- !.
+ 955  flight_reason(Way, [_, leg(_, Hub, _, _, _, _, Wait) | _], [change, Way, Hub, Wait]).
+ 956  
+ 957  extra_reason(_, _, _, _, _, Landed, _, _, [overnight]) :- Landed &gt; 1.
+ 958  extra_reason(_, _, _, People, Rooms, _, _, _, [rooms, People, Rooms]) :- People &gt; 1.
+ 959  extra_reason(_, _, _, _, _, _, Cities, _, [open_jaw, First, Last]) :-
+ 960      Cities = [First | _], last_elem(Cities, Last), \+ First = Last.
+ 961  extra_reason(_, _, _, _, _, _, Cities, Interests, [city, City, N, Cats]) :-
+ 962      no_dups(Cities, Unique),
+ 963      member(City, Unique), matches(City, Interests, N), N &gt; 0,
+ 964      matching_categories(City, Interests, Cats).
+ 965  extra_reason(Country, Days, _, _, _, _, _, _, [visa_ok, Country, Max]) :-
+ 966      visa_free(Country, Max), Days =&lt; Max.
+ 967  extra_reason(Country, Days, _, _, _, _, _, _, [visa_too_short, Country, Max]) :-
+ 968      visa_free(Country, Max), Days &gt; Max.
+ 969  extra_reason(Country, _, Month, _, _, _, _, _, [prices, Country, Month, Fly, Stay]) :-
+ 970      flight_level(Country, Month, Fly), hotel_level(Country, Month, Stay),
+ 971      \+ (Fly =:= 100, Stay =:= 100).
+ 972  extra_reason(_, _, Month, _, _, _, _, _, [thai_holiday, Name]) :-
+ 973      thai_holiday(Months, _, Name), member(Month, Months).
+ 974  extra_reason(Country, _, Month, _, _, _, _, _, [highlight, Country, What]) :-
+ 975      highlight(Country, What, Months), member(Month, Months).
+ 976  extra_reason(Country, _, Month, _, _, _, _, _, [warning, Country, What]) :-
+ 977      warning(Country, What, Months), member(Month, Months).
+ 978  
+ 979  %API 
+ 980  
+ 981  normalize_interests([], All) :- !, findall(I, interest(I), All).
+ 982  normalize_interests(Is, Is).
  983  
- 984  % ===========================================================================
- 985  % 8. API — called from Python (pyswip)
- 986  % ===========================================================================
- 987  
- 988  normalize_interests([], All) :- !, findall(I, interest(I), All).
- 989  normalize_interests(Is, Is).
- 990  
- 991  countries_for(anywhere, Cs) :- !, findall(C, destination(C), Cs).
- 992  countries_for(C, [C]).
- 993  
- 994  candidate(Home, Country, Days, People, Interests, Pace, Pref, Plan) :-
- 995      city(Arrive, _, _, _, Country, _, _),
- 996      airport(Arrive, _),
- 997      best_flights(Home, Arrive, Pref, Outs),
- 998      member(Out, Outs),
- 999      round_tour(Arrive, 4, Cities, Moves),
-1000      chosen_ok(Country, Cities),
-1001      last_elem(Cities, Last),
-1002      airport(Last, _),
-1003      home_airport(Home, Land),
-1004      best_flights(Last, Land, Pref, Rets),
-1005      member(Ret, Rets),
-1006      build_plan(Home, Country, Days, People, Interests, Pace, Out, Cities, Moves, Ret, Plan0),
-1007      Plan0 = plan(C, O, Cs, Ms, R, Ds, Costs, Meta),
-1008      attach_moves(Ds, Ms, Ds1),
-1009      Plan = plan(C, O, Cs, Ms, R, Ds1, Costs, Meta).
-1010  
-1011  home_airport(Home, Home).
-1012  home_airport(Home, Other) :- twin(Home, Other).
-1013  
-1014  plan_trip(Home, Dest, Days, Month, People, Budget, Interests, Pace, Pref, Result) :-
-1015      plan_trip(Home, Dest, Days, Month, People, Budget, Interests, Pace, Pref, [], Result).
-1016  
-1017  plan_trip(Home, Dest, Days, Month, People, Budget, Interests0, Pace, Pref, Options, [Stats, Rows]) :-
-1018      normalize_interests(Interests0, Interests),
-1019      reset_search,
-1020      set_month(Month),
-1021      set_options(Options),
-1022      countries_for(Dest, Countries),</pre>
+ 984  countries_for(anywhere, Cs) :- !, findall(C, destination(C), Cs).
+ 985  countries_for(C, [C]).
+ 986  
+ 987  candidate(Home, Country, Days, People, Interests, Pace, Pref, Plan) :-
+ 988      city(Arrive, _, _, _, Country, _, _),
+ 989      airport(Arrive, _),
+ 990      best_flights(Home, Arrive, Pref, Outs),
+ 991      member(Out, Outs),
+ 992      round_tour(Arrive, 4, Cities, Moves),</pre>
           </div>
           <div class="page-num">23</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre">1023      findall(P, (member(C, Countries), candidate(Home, C, Days, People, Interests, Pace, Pref, P)), Plans),
-1024      listlen(Plans, NPlans),
-1025      affordable(Budget, Plans, Cheap),
-1026      listlen(Cheap, NCheap),
-1027      pool(Cheap, Plans, Pool),
-1028      choose(Dest, Pref, Countries, Pool, Chosen),
-1029      rows(Chosen, 1, Dest, Pref, NPlans, Budget, Days, Month, People, Interests, Rows),
-1030      steps(Steps),
-1031      findall([A, B], explored(A, B), Edges),
-1032      findall(x, (flight_memo(_, _, _, Best), member(_, Best)), Fs), listlen(Fs, NFlights),
-1033      Stats = [Steps, Edges, NFlights, NPlans, NCheap].
-1034  
-1035  pool([], Plans, Plans) :- !.
-1036  pool(Cheap, _, Cheap).
-1037  
-1038  choose(anywhere, Pref, Countries, Pool, Chosen) :- !,
-1039      best_per_country(Pref, Countries, Pool, Pairs),
-1040      insort(Pairs, Sorted), values(Sorted, Ranked),
-1041      take(3, Ranked, Chosen).
-1042  choose(_, Pref, _, Pool, Chosen) :-
-1043      rank(Pref, Pool, Ranked),
-1044      different(3, Ranked, Chosen).
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre"> 993      chosen_ok(Country, Cities),
+ 994      last_elem(Cities, Last),
+ 995      airport(Last, _),
+ 996      home_airport(Home, Land),
+ 997      best_flights(Last, Land, Pref, Rets),
+ 998      member(Ret, Rets),
+ 999      build_plan(Home, Country, Days, People, Interests, Pace, Out, Cities, Moves, Ret, Plan0),
+1000      Plan0 = plan(C, O, Cs, Ms, R, Ds, Costs, Meta),
+1001      attach_moves(Ds, Ms, Ds1),
+1002      Plan = plan(C, O, Cs, Ms, R, Ds1, Costs, Meta).
+1003  
+1004  home_airport(Home, Home).
+1005  home_airport(Home, Other) :- twin(Home, Other).
+1006  
+1007  plan_trip(Home, Dest, Days, Month, People, Budget, Interests, Pace, Pref, Result) :-
+1008      plan_trip(Home, Dest, Days, Month, People, Budget, Interests, Pace, Pref, [], Result).
+1009  
+1010  plan_trip(Home, Dest, Days, Month, People, Budget, Interests0, Pace, Pref, Options, [Stats, Rows]) :-
+1011      normalize_interests(Interests0, Interests),
+1012      reset_search,
+1013      set_month(Month),
+1014      set_options(Options),
+1015      countries_for(Dest, Countries),
+1016      findall(P, (member(C, Countries), candidate(Home, C, Days, People, Interests, Pace, Pref, P)), Plans),
+1017      listlen(Plans, NPlans),
+1018      affordable(Budget, Plans, Cheap),
+1019      listlen(Cheap, NCheap),
+1020      pool(Cheap, Plans, Pool),
+1021      choose(Dest, Pref, Countries, Pool, Chosen),
+1022      rows(Chosen, 1, Dest, Pref, NPlans, Budget, Days, Month, People, Interests, Rows),
+1023      steps(Steps),
+1024      findall([A, B], explored(A, B), Edges),
+1025      findall(x, (flight_memo(_, _, _, Best), member(_, Best)), Fs), listlen(Fs, NFlights),
+1026      Stats = [Steps, Edges, NFlights, NPlans, NCheap].
+1027  
+1028  pool([], Plans, Plans) :- !.
+1029  pool(Cheap, _, Cheap).
+1030  
+1031  choose(anywhere, Pref, Countries, Pool, Chosen) :- !,
+1032      best_per_country(Pref, Countries, Pool, Pairs),
+1033      insort(Pairs, Sorted), values(Sorted, Ranked),
+1034      take(3, Ranked, Chosen).
+1035  choose(_, Pref, _, Pool, Chosen) :-
+1036      rank(Pref, Pool, Ranked),
+1037      different(3, Ranked, Chosen).
+1038  
+1039  rows([], _, _, _, _, _, _, _, _, _, []).
+1040  rows([P | Ps], I, Dest, Pref, Count, Budget, Days, Month, People, Interests, [Row | Rest]) :-
+1041      reasons(Dest, Pref, I, Count, Budget, Days, Month, People, Interests, P, Reasons),
+1042      plan_row(P, Budget, Reasons, Row),
+1043      I1 is I + 1,
+1044      rows(Ps, I1, Dest, Pref, Count, Budget, Days, Month, People, Interests, Rest).
 1045  
-1046  rows([], _, _, _, _, _, _, _, _, _, []).
-1047  rows([P | Ps], I, Dest, Pref, Count, Budget, Days, Month, People, Interests, [Row | Rest]) :-
-1048      reasons(Dest, Pref, I, Count, Budget, Days, Month, People, Interests, P, Reasons),
-1049      plan_row(P, Budget, Reasons, Row),
-1050      I1 is I + 1,
-1051      rows(Ps, I1, Dest, Pref, Count, Budget, Days, Month, People, Interests, Rest).
-1052  
-1053  plan_row(plan(Country, Out, Cities, Moves, Ret, Days, costs(Fl, Gr, Ho, Da, Fe, T), meta(Rooms, Nights, Landed, Min, Enjoy, Free)),
-1054           Budget, Reasons,
-1055           [Country, OutRows, Cities, MoveRows, RetRows, DayRows, [Fl, Gr, Ho, Da, Fe, T], Fits, Reasons,
-1056            [Rooms, Nights, Landed, Min, Enjoy, Free], RoomRows]) :-
-1057      no_dups(Cities, Unique),
-1058      room_rows(Unique, RoomRows),
-1059      leg_rows(Out, OutRows),
-1060      leg_rows(Ret, RetRows),
-1061      move_rows(Moves, MoveRows),
-1062      day_rows(Days, DayRows),
-1063      fits(T, Budget, Fits).
-1064  
-1065  room_rows([], []).
-1066  room_rows([C | Cs], [[C, P] | Rows]) :- room_price(C, P), room_rows(Cs, Rows).
-1067  
-1068  fits(T, Budget, yes) :- T =&lt; Budget, !.
-1069  fits(_, _, no).
-1070  
-1071  leg_rows([], []).
-1072  leg_rows([leg(C, F, T, D, A, P, W) | Ls], [[C, F, T, D, A, P, W] | Rs]) :- leg_rows(Ls, Rs).
-1073  
-1074  move_rows([], []).
-1075  move_rows([move(F, T, M, P, Min) | Ms], [[F, T, M, P, Min] | Rs]) :- move_rows(Ms, Rs).
-1076  
-1077  day_rows([], []).
-1078  day_rows([day(N, Kind, City, Travel, Acts) | Ds], [[N, Kind, City, TravelRow, ActRows] | Rs]) :-
-1079      travel_row(Travel, TravelRow),
-1080      act_rows(Acts, ActRows),
-1081      day_rows(Ds, Rs).
-1082  
-1083  travel_row(none, none).
-1084  travel_row(flights(Legs), [flights, Rows]) :- leg_rows(Legs, Rows).
-1085  travel_row(ground(F, T, M, P, Min), [ground, F, T, M, P, Min]).
-1086  </pre>
+1046  plan_row(plan(Country, Out, Cities, Moves, Ret, Days, costs(Fl, Gr, Ho, Da, Fe, T), meta(Rooms, Nights, Landed, Min, Enjoy, Free)),
+1047           Budget, Reasons,
+1048           [Country, OutRows, Cities, MoveRows, RetRows, DayRows, [Fl, Gr, Ho, Da, Fe, T], Fits, Reasons,
+1049            [Rooms, Nights, Landed, Min, Enjoy, Free], RoomRows]) :-
+1050      no_dups(Cities, Unique),
+1051      room_rows(Unique, RoomRows),
+1052      leg_rows(Out, OutRows),
+1053      leg_rows(Ret, RetRows),
+1054      move_rows(Moves, MoveRows),</pre>
           </div>
           <div class="page-num">24</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: prolog/trip.pl (lines 1-1102) (cont.)</div>
-            <pre class="code-pre">1087  act_rows([], []).
-1088  act_rows([act(N, C, F, H) | As], [[N, C, F, H] | Rs]) :- act_rows(As, Rs).
-1089  
-1090  map_data(Countries, Cities, Flights, Ground) :-
-1091      findall([Id, Name, Thai, Daily, Visa],
-1092              (country(Id, Name, Thai, Daily), visa_days(Id, Visa)), Countries),
-1093      findall([Id, Name, Thai, Code, Country, Lat, Lon, Zone],
-1094              (city(Id, Name, Thai, Code, Country, Lat, Lon), zone(Id, Zone)), Cities),
-1095      findall([Code, From, To, Dep, Min, Price], flight(Code, From, To, Dep, Min, Price), Flights),
-1096      findall([A, B, M, P, Min], ground(A, B, M, P, Min), Ground).
-1097  
-1098  visa_days(C, D) :- visa_free(C, D), !.
-1099  visa_days(_, none).
-1100  
-1101  zone(City, Z) :- airport(City, Z), !.
-1102  zone(_, none).</pre>
+            <div class="code-label">File: prolog/trip.pl (lines 1-1095) (cont.)</div>
+            <pre class="code-pre">1055      day_rows(Days, DayRows),
+1056      fits(T, Budget, Fits).
+1057  
+1058  room_rows([], []).
+1059  room_rows([C | Cs], [[C, P] | Rows]) :- room_price(C, P), room_rows(Cs, Rows).
+1060  
+1061  fits(T, Budget, yes) :- T =&lt; Budget, !.
+1062  fits(_, _, no).
+1063  
+1064  leg_rows([], []).
+1065  leg_rows([leg(C, F, T, D, A, P, W) | Ls], [[C, F, T, D, A, P, W] | Rs]) :- leg_rows(Ls, Rs).
+1066  
+1067  move_rows([], []).
+1068  move_rows([move(F, T, M, P, Min) | Ms], [[F, T, M, P, Min] | Rs]) :- move_rows(Ms, Rs).
+1069  
+1070  day_rows([], []).
+1071  day_rows([day(N, Kind, City, Travel, Acts) | Ds], [[N, Kind, City, TravelRow, ActRows] | Rs]) :-
+1072      travel_row(Travel, TravelRow),
+1073      act_rows(Acts, ActRows),
+1074      day_rows(Ds, Rs).
+1075  
+1076  travel_row(none, none).
+1077  travel_row(flights(Legs), [flights, Rows]) :- leg_rows(Legs, Rows).
+1078  travel_row(ground(F, T, M, P, Min), [ground, F, T, M, P, Min]).
+1079  
+1080  act_rows([], []).
+1081  act_rows([act(N, C, F, H) | As], [[N, C, F, H] | Rs]) :- act_rows(As, Rs).
+1082  
+1083  map_data(Countries, Cities, Flights, Ground) :-
+1084      findall([Id, Name, Thai, Daily, Visa],
+1085              (country(Id, Name, Thai, Daily), visa_days(Id, Visa)), Countries),
+1086      findall([Id, Name, Thai, Code, Country, Lat, Lon, Zone],
+1087              (city(Id, Name, Thai, Code, Country, Lat, Lon), zone(Id, Zone)), Cities),
+1088      findall([Code, From, To, Dep, Min, Price], flight(Code, From, To, Dep, Min, Price), Flights),
+1089      findall([A, B, M, P, Min], ground(A, B, M, P, Min), Ground).
+1090  
+1091  visa_days(C, D) :- visa_free(C, D), !.
+1092  visa_days(_, none).
+1093  
+1094  zone(City, Z) :- airport(City, Z), !.
+1095  zone(_, none).</pre>
           </div>
           <div class="page-num">25</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
             <div class="code-label">File: backend/planner.py (lines 1-340)</div>
             <pre class="code-pre">   1  from __future__ import annotations
    2  
@@ -1881,17 +1859,16 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
   59          countries = [
   60              {&quot;id&quot;: c[0], &quot;name&quot;: c[1], &quot;thai&quot;: c[2], &quot;daily&quot;: c[3], &quot;visa&quot;: None if c[4] == &quot;none&quot; else c[4]}
   61              for c in res[&quot;Countries&quot;]
-  62          ]
-  63          cities = []
-  64          for c in res[&quot;Cities&quot;]:</pre>
+  62          ]</pre>
           </div>
           <div class="page-num">26</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
             <div class="code-label">File: backend/planner.py (lines 1-340) (cont.)</div>
-            <pre class="code-pre">  65              x, y = project(c[5], c[6])
+            <pre class="code-pre">  63          cities = []
+  64          for c in res[&quot;Cities&quot;]:
+  65              x, y = project(c[5], c[6])
   66              cities.append({
   67                  &quot;id&quot;: c[0], &quot;name&quot;: c[1], &quot;thai&quot;: c[2], &quot;code&quot;: c[3], &quot;country&quot;: c[4],
   68                  &quot;lat&quot;: c[5], &quot;lon&quot;: c[6], &quot;x&quot;: x, &quot;y&quot;: y, &quot;zone&quot;: None if c[7] == &quot;none&quot; else c[7],
@@ -1950,19 +1927,18 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
  121          days = max(3, min(21, int(days)))
  122          month = max(1, min(12, int(month)))
  123          people = max(1, min(6, int(people)))
- 124          budget = max(0, int(budget))
- 125  
- 126          opts = self.option_terms(options or {}, destination)
- 127          query = (
- 128              f&quot;plan_trip({origin}, {destination}, {days}, {month}, {people}, {budget}, &quot;</pre>
+ 124          budget = max(0, int(budget))</pre>
           </div>
           <div class="page-num">27</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
             <div class="code-label">File: backend/planner.py (lines 1-340) (cont.)</div>
-            <pre class="code-pre"> 129              f&quot;[{&#x27;,&#x27;.join(interests)}], {pace}, {preference}, [{&#x27;,&#x27;.join(opts)}], Result)&quot;
+            <pre class="code-pre"> 125  
+ 126          opts = self.option_terms(options or {}, destination)
+ 127          query = (
+ 128              f&quot;plan_trip({origin}, {destination}, {days}, {month}, {people}, {budget}, &quot;
+ 129              f&quot;[{&#x27;,&#x27;.join(interests)}], {pace}, {preference}, [{&#x27;,&#x27;.join(opts)}], Result)&quot;
  130          )
  131          res = self._one(query)
  132          if res is None:
@@ -2019,21 +1995,20 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
  183              if first_day is None:
  184                  first_day = dep_day
  185              legs.append({
- 186                  &quot;code&quot;: code, &quot;from&quot;: frm, &quot;to&quot;: to, &quot;price&quot;: price, &quot;wait&quot;: wait,
- 187                  &quot;minutes&quot;: arr - dep,
- 188                  &quot;depart&quot;: dep_clock, &quot;arrive&quot;: arr_clock,
- 189                  &quot;departDay&quot;: dep_day - first_day, &quot;arriveDay&quot;: arr_day - first_day,
- 190              })
- 191          return legs
- 192  </pre>
+ 186                  &quot;code&quot;: code, &quot;from&quot;: frm, &quot;to&quot;: to, &quot;price&quot;: price, &quot;wait&quot;: wait,</pre>
           </div>
           <div class="page-num">28</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
             <div class="code-label">File: backend/planner.py (lines 1-340) (cont.)</div>
-            <pre class="code-pre"> 193      def _option(self, row, preference) -&gt; dict:
+            <pre class="code-pre"> 187                  &quot;minutes&quot;: arr - dep,
+ 188                  &quot;depart&quot;: dep_clock, &quot;arrive&quot;: arr_clock,
+ 189                  &quot;departDay&quot;: dep_day - first_day, &quot;arriveDay&quot;: arr_day - first_day,
+ 190              })
+ 191          return legs
+ 192  
+ 193      def _option(self, row, preference) -&gt; dict:
  194          country, out, cities, moves, ret, days, cost, fits, reasons, meta, rooms_per_night = row
  195          flights, ground, hotel, daily, fees, total = cost
  196          rooms, nights, landed, flight_minutes, enjoy, free = meta
@@ -2088,23 +2063,22 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
  245              return f&quot;{way}: direct flight {a[1]} from {n(a[2])} to {n(a[3])}&quot;
  246          if tag == &quot;change&quot;:
  247              way = &quot;There&quot; if a[0] == &quot;out&quot; else &quot;Home&quot;
- 248              return f&quot;{way}: change planes in {n(a[1])}, {duration(a[2])} between flights&quot;
- 249          if tag == &quot;other_airport&quot;:
+ 248              return f&quot;{way}: change planes in {n(a[1])}, {duration(a[2])} between flights&quot;</pre>
+          </div>
+          <div class="page-num">29</div>
+        </section>
+        <section class="page">
+          <div class="frame-box code-box">
+            <div class="code-label">File: backend/planner.py (lines 1-340) (cont.)</div>
+            <pre class="code-pre"> 249          if tag == &quot;other_airport&quot;:
  250              return f&quot;Flies home to {n(a[1])}, Bangkok&#x27;s other airport (you left from {n(a[0])})&quot;
  251          if tag == &quot;overnight&quot;:
  252              return &quot;Overnight flight: you sleep on the plane and land the next morning&quot;
  253          if tag == &quot;rooms&quot;:
  254              return f&quot;{a[0]} travellers share {a[1]} hotel room{&#x27;s&#x27; if a[1] != 1 else &#x27;&#x27;}&quot;
  255          if tag == &quot;open_jaw&quot;:
- 256              return f&quot;Flies into {n(a[0])} and home from {n(a[1])}, so you never go back the same way&quot;</pre>
-          </div>
-          <div class="page-num">29</div>
-        </section>
-        <section class="page">
-          <div class="frame-box code-box">
-            
-            <div class="code-label">File: backend/planner.py (lines 1-340) (cont.)</div>
-            <pre class="code-pre"> 257          if tag == &quot;city&quot;:
+ 256              return f&quot;Flies into {n(a[0])} and home from {n(a[1])}, so you never go back the same way&quot;
+ 257          if tag == &quot;city&quot;:
  258              cats = &quot;, &quot;.join(a[2])
  259              return f&quot;{n(a[0])}: {a[1]} place{&#x27;s&#x27; if a[1] != 1 else &#x27;&#x27;} for {cats}&quot;
  260          if tag == &quot;visa_ok&quot;:
@@ -2157,8 +2131,14 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
  307          return &quot; &quot;.join(str(x) for x in r)
  308  
  309      def _empty_reason(self, origin, destination, flight_options, plans, days, pace) -&gt; str | None:
- 310          if flight_options == 0:
- 311              where = &quot;any country&quot; if destination == &quot;anywhere&quot; else self.countries[destination][&quot;name&quot;]
+ 310          if flight_options == 0:</pre>
+          </div>
+          <div class="page-num">30</div>
+        </section>
+        <section class="page">
+          <div class="frame-box code-box">
+            <div class="code-label">File: backend/planner.py (lines 1-340) (cont.)</div>
+            <pre class="code-pre"> 311              where = &quot;any country&quot; if destination == &quot;anywhere&quot; else self.countries[destination][&quot;name&quot;]
  312              return (f&quot;No flights from {self._name(origin)} reach {where} with these flight options. &quot;
  313                      &quot;Try allowing more changes, any airline, or night flights.&quot;)
  314          if plans == 0:
@@ -2167,15 +2147,8 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
  317                      &quot;or pick different cities.&quot;)
  318          return None
  319  
- 320  </pre>
-          </div>
-          <div class="page-num">30</div>
-        </section>
-        <section class="page">
-          <div class="frame-box code-box">
-            
-            <div class="code-label">File: backend/planner.py (lines 1-340) (cont.)</div>
-            <pre class="code-pre"> 321  _planner: Planner | None = None
+ 320  
+ 321  _planner: Planner | None = None
  322  
  323  
  324  def get_planner() -&gt; Planner:
@@ -2200,146 +2173,163 @@ score    : K  = K0 + FreeDays * TotalCost // TripDays</pre>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: app.py (lines 384-511)</div>
-            <pre class="code-pre"> 384      def options(self, f: dict) -&gt; dict:
- 385          return {k: f[k] for k in (&quot;max_flights&quot;, &quot;airlines&quot;, &quot;night_flights&quot;, &quot;hotel&quot;, &quot;cities&quot;, &quot;getting_around&quot;)}
- 386  
- 387      def refresh_query(self) -&gt; None:
- 388          f = self.form
- 389          opts = &quot;,&quot;.join(self.planner.option_terms(self.options(f), f[&quot;to&quot;]))
- 390          self.results.set_query(f&#x27;?- plan_trip({f[&quot;from&quot;]}, {f[&quot;to&quot;]}, {f[&quot;days&quot;]}, {f[&quot;month&quot;]}, {f[&quot;people&quot;]}, &#x27;
- 391                                 f&#x27;{f[&quot;budget&quot;]}, [{&quot;,&quot;.join(f[&quot;interests&quot;])}], {f[&quot;pace&quot;]}, {f[&quot;pref&quot;]}, [{opts}], Plan).&#x27;)
- 392  
- 393      def set_ticker(self, html: str, state: str) -&gt; None:
- 394          self.ticker.setText(html)
- 395          lamp = {&quot;searching&quot;: &quot;marigold&quot;, &quot;travelling&quot;: &quot;marigold&quot;, &quot;done&quot;: &quot;ok&quot;, &quot;off&quot;: &quot;danger&quot;}.get(state, &quot;ink3&quot;)
- 396          self.lamp.setStyleSheet(f&quot;background:{C[lamp]}; border-radius:4px;&quot;)
- 397  
- 398      # ------------------------------------------------------------ search and journey
- 399  
- 400      def search(self) -&gt; None:
- 401          if self.phase == &quot;searching&quot;:
- 402              return
- 403          self.map.clear()
- 404          self.show_page(1)
- 405          self.phase = &quot;searching&quot;
- 406          self.back_btn.setEnabled(False)
- 407          self.searched = dict(self.form)
- 408          self.offers = {}
- 409          self.selected = 0
- 410          self.go.setEnabled(False)
- 411          self.go.setText(&quot;Searching…&quot;)
- 412          self.skip_btn.hide()
- 413          self.set_ticker(span(&quot;Querying&quot;, &quot;marigold&quot;, weight=600) + &quot; · consulting trip.pl&quot;, &quot;searching&quot;)
- 414          self.results.show_message(&quot;Searching&quot;, &quot;Prolog is trying every flight and connection and backtracking out &quot;
- 415                                    &quot;of dead ends. Watch the map.&quot;)
- 416          f = self.form
- 417          self.fare_status = &quot;off&quot;
- 418          if live_prices.token() or live_prices.CACHE.exists():
- 419              where = &quot;asking Aviasales&quot; if live_prices.token() else &quot;reading saved fares&quot;
- 420              back = self.back_date(f)
- 421              self.set_ticker(span(&quot;Fetching fares&quot;, &quot;marigold&quot;, weight=600)
- 422                              + f&#x27; · {where} for {f[&quot;date&quot;]:%d %b} and {back:%d %b}&#x27;, &quot;searching&quot;)
- 423              outbound, inbound = self.planner.fare_routes(f[&quot;from&quot;], f[&quot;to&quot;])
- 424              job: Future = self.pool.submit(live_prices.fares_for, outbound, inbound, f[&quot;date&quot;], back)
- 425  
- 426              def wait() -&gt; None:
- 427                  if not job.done():
- 428                      QTimer.singleShot(80, wait)
- 429                      return
- 430                  try:
- 431                      got = job.result()
- 432                      self.fare_status = got[&quot;status&quot;] if got[&quot;fares&quot;] else &quot;none&quot;
- 433                      self.offers = got.get(&quot;offers&quot;, {})
- 434                      self.planner.set_live_fares(got[&quot;fares&quot;], self.offers)
- 435                  except Exception:
- 436                      self.fare_status = &quot;error&quot;
- 437                      self.planner.set_live_fares({})
- 438                  self._run_prolog()
- 439  
- 440              QTimer.singleShot(80, wait)
- 441          else:
- 442              self.planner.set_live_fares({})
- 443              self._run_prolog()
- 444  
- 445      def _run_prolog(self) -&gt; None:
- 446          self.set_ticker(span(&quot;Querying&quot;, &quot;marigold&quot;, weight=600) + &quot; · consulting trip.pl&quot;, &quot;searching&quot;)
- 447          QApplication.processEvents()</pre>
+            <div class="code-label">File: app.py (lines 381-522)</div>
+            <pre class="code-pre"> 381      def options(self, f: dict) -&gt; dict:
+ 382          return {k: f[k] for k in (&quot;max_flights&quot;, &quot;airlines&quot;, &quot;night_flights&quot;, &quot;hotel&quot;, &quot;cities&quot;, &quot;getting_around&quot;)}
+ 383  
+ 384      def refresh_query(self) -&gt; None:
+ 385          f = self.form
+ 386          opts = &quot;,&quot;.join(self.planner.option_terms(self.options(f), f[&quot;to&quot;]))
+ 387          self.results.set_query(f&#x27;?- plan_trip({f[&quot;from&quot;]}, {f[&quot;to&quot;]}, {f[&quot;days&quot;]}, {f[&quot;month&quot;]}, {f[&quot;people&quot;]}, &#x27;
+ 388                                 f&#x27;{f[&quot;budget&quot;]}, [{&quot;,&quot;.join(f[&quot;interests&quot;])}], {f[&quot;pace&quot;]}, {f[&quot;pref&quot;]}, [{opts}], Plan).&#x27;)
+ 389  
+ 390      def set_ticker(self, html: str, state: str) -&gt; None:
+ 391          self.ticker.setText(html)
+ 392          lamp = {&quot;searching&quot;: &quot;marigold&quot;, &quot;travelling&quot;: &quot;marigold&quot;, &quot;done&quot;: &quot;ok&quot;, &quot;off&quot;: &quot;danger&quot;}.get(state, &quot;ink3&quot;)
+ 393          self.lamp.setStyleSheet(f&quot;background:{C[lamp]}; border-radius:4px;&quot;)
+ 394  
+ 395      #search and journey
+ 396  
+ 397      def search(self) -&gt; None:
+ 398          if self.phase == &quot;searching&quot;:
+ 399              return
+ 400          self.map.clear()
+ 401          self.show_page(1)
+ 402          self.phase = &quot;searching&quot;
+ 403          self.back_btn.setEnabled(False)
+ 404          self.searched = dict(self.form)
+ 405          self.offers = {}
+ 406          self.selected = 0
+ 407          self.go.setEnabled(False)
+ 408          self.go.setText(&quot;Searching…&quot;)
+ 409          self.skip_btn.hide()
+ 410          self.set_ticker(span(&quot;Querying&quot;, &quot;marigold&quot;, weight=600) + &quot; · consulting trip.pl&quot;, &quot;searching&quot;)
+ 411          self.results.show_message(&quot;Searching&quot;, &quot;Prolog is trying every flight and connection and backtracking out &quot;
+ 412                                    &quot;of dead ends. Watch the map.&quot;)
+ 413          f = self.form
+ 414          self.fare_status = &quot;off&quot;
+ 415          if live_prices.token() or live_prices.CACHE.exists():
+ 416              where = &quot;asking Aviasales&quot; if live_prices.token() else &quot;reading saved fares&quot;
+ 417              back = self.back_date(f)
+ 418              self.set_ticker(span(&quot;Fetching fares&quot;, &quot;marigold&quot;, weight=600)
+ 419                              + f&#x27; · {where} for {f[&quot;date&quot;]:%d %b} and {back:%d %b}&#x27;, &quot;searching&quot;)
+ 420              outbound, inbound = self.planner.fare_routes(f[&quot;from&quot;], f[&quot;to&quot;])
+ 421              job: Future = self.pool.submit(live_prices.fares_for, outbound, inbound, f[&quot;date&quot;], back)
+ 422  
+ 423              def wait() -&gt; None:
+ 424                  if not job.done():
+ 425                      QTimer.singleShot(80, wait)
+ 426                      return
+ 427                  try:
+ 428                      got = job.result()
+ 429                      self.fare_status = got[&quot;status&quot;] if got[&quot;fares&quot;] else &quot;none&quot;
+ 430                      self.offers = got.get(&quot;offers&quot;, {})
+ 431                      self.planner.set_live_fares(got[&quot;fares&quot;], self.offers)
+ 432                  except Exception:
+ 433                      self.fare_status = &quot;error&quot;
+ 434                      self.planner.set_live_fares({})
+ 435                  self._run_prolog()
+ 436  
+ 437              QTimer.singleShot(80, wait)
+ 438          else:
+ 439              self.planner.set_live_fares({})
+ 440              self._run_prolog()
+ 441  
+ 442      def _run_prolog(self) -&gt; None:</pre>
           </div>
           <div class="page-num">32</div>
         </section>
         <section class="page">
           <div class="frame-box code-box">
-            
-            <div class="code-label">File: app.py (lines 384-511) (cont.)</div>
-            <pre class="code-pre"> 448          f = self.searched
- 449          try:
- 450              self.result = self.planner.plan(f[&quot;from&quot;], f[&quot;to&quot;], f[&quot;days&quot;], f[&quot;month&quot;], f[&quot;people&quot;], f[&quot;budget&quot;],
- 451                                              f[&quot;interests&quot;], f[&quot;pace&quot;], f[&quot;pref&quot;], self.options(f))
- 452          except PlannerError as e:
- 453              self.phase = &quot;idle&quot;
- 454              self._ready()
- 455              self.set_ticker(&quot;Prolog could not answer that&quot;, &quot;off&quot;)
- 456              self.results.show_notice(str(e), error=True)
- 457              return
- 458          stats = self.result[&quot;stats&quot;]
- 459          total = max(1, len(stats[&quot;explored&quot;]))
- 460  
- 461          def progress(i: int) -&gt; None:
- 462              steps = round(stats[&quot;steps&quot;] * i / total)
- 463              self.set_ticker(span(&quot;Backtracking&quot;, &quot;marigold&quot;, weight=600)
- 464                              + f&quot; · {steps:,} steps · {plural(i, &#x27;flight route&#x27;)} tried&quot;, &quot;searching&quot;)
- 465  
- 466          self.map.replay(stats[&quot;explored&quot;], progress, self._after_search)
- 467  
- 468      def _after_search(self) -&gt; None:
- 469          if self.result[&quot;options&quot;]:
- 470              self.travel(0)
- 471          else:
- 472              self.phase = &quot;done&quot;
- 473              self._ready()
- 474              self._summary()
- 475              self.results.show_notice(self.result[&quot;empty_reason&quot;] or &quot;No trip found. Try more days or a bigger budget.&quot;)
- 476  
- 477      def pick_plan(self, index: int) -&gt; None:
- 478          if self.phase != &quot;searching&quot;:
- 479              self.travel(index)
- 480  
- 481      def travel(self, index: int) -&gt; None:
- 482          self.selected = index
- 483          self.phase = &quot;travelling&quot;
- 484          self._ready()
- 485          self.skip_btn.show()
- 486          opt = self.result[&quot;options&quot;][index]
- 487          self.results.show_plan(self.result, index, False, self.searched, self.pick_plan, self.offers)
- 488  
- 489          def stage(text: str) -&gt; None:
- 490              verb, _, rest = text.partition(&quot; · &quot;)
- 491              self.set_ticker(span(verb, &quot;marigold&quot;, weight=600) + (f&quot; · {rest}&quot; if rest else &quot;&quot;), &quot;travelling&quot;)
- 492  
- 493          self.map.travel(opt, self.searched[&quot;from&quot;], stage, self._arrived)
- 494  
- 495      def _arrived(self) -&gt; None:
- 496          self.phase = &quot;done&quot;
- 497          self.skip_btn.hide()
- 498          self._ready()
- 499          self._summary()
- 500          self.results.show_plan(self.result, self.selected, True, self.searched, self.pick_plan, self.offers)
- 501  
- 502      def _summary(self) -&gt; None:
- 503          s = self.result[&quot;stats&quot;]
- 504          self.set_ticker(span(plural(s[&quot;plans&quot;], &quot;plan&quot;), &quot;marigold&quot;, weight=600)
- 505                          + f&#x27; built · {s[&quot;affordable&quot;]} within budget · {plural(s[&quot;flightOptions&quot;], &quot;flight option&quot;)}&#x27;
- 506                          f&#x27; · {s[&quot;steps&quot;]:,} steps · {FARES.get(self.fare_status, &quot;sample fares&quot;)}&#x27;, &quot;done&quot;)
- 507  
- 508      def _ready(self) -&gt; None:
- 509          self.back_btn.setEnabled(True)
- 510          self.go.setEnabled(True)
- 511          self.go.setText(&quot;Find trips                                      →&quot;)</pre>
+            <div class="code-label">File: app.py (lines 381-522) (cont.)</div>
+            <pre class="code-pre"> 443          self.set_ticker(span(&quot;Querying&quot;, &quot;marigold&quot;, weight=600) + &quot; · consulting trip.pl&quot;, &quot;searching&quot;)
+ 444          QApplication.processEvents()
+ 445          f = self.searched
+ 446          try:
+ 447              self.result = self.planner.plan(f[&quot;from&quot;], f[&quot;to&quot;], f[&quot;days&quot;], f[&quot;month&quot;], f[&quot;people&quot;], f[&quot;budget&quot;],
+ 448                                              f[&quot;interests&quot;], f[&quot;pace&quot;], f[&quot;pref&quot;], self.options(f))
+ 449          except PlannerError as e:
+ 450              self.phase = &quot;idle&quot;
+ 451              self._ready()
+ 452              self.set_ticker(&quot;Prolog could not answer that&quot;, &quot;off&quot;)
+ 453              self.results.show_notice(str(e), error=True)
+ 454              return
+ 455          stats = self.result[&quot;stats&quot;]
+ 456          total = max(1, len(stats[&quot;explored&quot;]))
+ 457  
+ 458          def progress(i: int) -&gt; None:
+ 459              steps = round(stats[&quot;steps&quot;] * i / total)
+ 460              self.set_ticker(span(&quot;Backtracking&quot;, &quot;marigold&quot;, weight=600)
+ 461                              + f&quot; · {steps:,} steps · {plural(i, &#x27;flight route&#x27;)} tried&quot;, &quot;searching&quot;)
+ 462  
+ 463          self.map.replay(stats[&quot;explored&quot;], progress, self._after_search)
+ 464  
+ 465      def _after_search(self) -&gt; None:
+ 466          if self.result[&quot;options&quot;]:
+ 467              self.travel(0)
+ 468          else:
+ 469              self.phase = &quot;done&quot;
+ 470              self._ready()
+ 471              self._summary()
+ 472              self.results.show_notice(self.result[&quot;empty_reason&quot;] or &quot;No trip found. Try more days or a bigger budget.&quot;)
+ 473  
+ 474      def pick_plan(self, index: int) -&gt; None:
+ 475          if self.phase != &quot;searching&quot;:
+ 476              self.travel(index)
+ 477  
+ 478      def travel(self, index: int) -&gt; None:
+ 479          self.selected = index
+ 480          self.phase = &quot;travelling&quot;
+ 481          self._ready()
+ 482          self.skip_btn.show()
+ 483          opt = self.result[&quot;options&quot;][index]
+ 484          self.results.show_plan(self.result, index, False, self.searched, self.pick_plan, self.offers)
+ 485  
+ 486          def stage(text: str) -&gt; None:
+ 487              verb, _, rest = text.partition(&quot; · &quot;)
+ 488              self.set_ticker(span(verb, &quot;marigold&quot;, weight=600) + (f&quot; · {rest}&quot; if rest else &quot;&quot;), &quot;travelling&quot;)
+ 489  
+ 490          self.map.travel(opt, self.searched[&quot;from&quot;], stage, self._arrived)
+ 491  
+ 492      def _arrived(self) -&gt; None:
+ 493          self.phase = &quot;done&quot;
+ 494          self.skip_btn.hide()
+ 495          self._ready()
+ 496          self._summary()
+ 497          self.results.show_plan(self.result, self.selected, True, self.searched, self.pick_plan, self.offers)
+ 498  
+ 499      def _summary(self) -&gt; None:
+ 500          s = self.result[&quot;stats&quot;]
+ 501          self.set_ticker(span(plural(s[&quot;plans&quot;], &quot;plan&quot;), &quot;marigold&quot;, weight=600)
+ 502                          + f&#x27; built · {s[&quot;affordable&quot;]} within budget · {plural(s[&quot;flightOptions&quot;], &quot;flight option&quot;)}&#x27;
+ 503                          f&#x27; · {s[&quot;steps&quot;]:,} steps · {FARES.get(self.fare_status, &quot;sample fares&quot;)}&#x27;, &quot;done&quot;)
+ 504  </pre>
           </div>
           <div class="page-num">33</div>
         </section>
-
+        <section class="page">
+          <div class="frame-box code-box">
+            <div class="code-label">File: app.py (lines 381-522) (cont.)</div>
+            <pre class="code-pre"> 505      def _ready(self) -&gt; None:
+ 506          self.back_btn.setEnabled(True)
+ 507          self.go.setEnabled(True)
+ 508          self.go.setText(&quot;Find trips                                      →&quot;)
+ 509  
+ 510  
+ 511  def main() -&gt; None:
+ 512      app = QApplication(sys.argv)
+ 513      app.setApplicationName(&quot;Tang&quot;)
+ 514      theme.setup(app)
+ 515      window = TangWindow()
+ 516      window.show()
+ 517      window.map.show_asia()
+ 518      sys.exit(app.exec())
+ 519  
+ 520  
+ 521  if __name__ == &quot;__main__&quot;:
+ 522      main()</pre>
+          </div>
+          <div class="page-num">34</div>
+        </section>
 </body>
 </html>

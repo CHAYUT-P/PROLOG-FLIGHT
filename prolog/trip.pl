@@ -534,10 +534,26 @@ shortest([R | Rs], R, Rs).
 
 cheaper(r(C1, _, _, _, _), r(C2, _, _, _, _)) :- C1 < C2.
 
+bangkok_airport(bangkok).
+bangkok_airport(don_mueang).
+
 back_to_thailand(Here, Next, To) :-
     city(To, _, _, _, C0, _, _), \+ C0 = thailand,
     city(Here, _, _, _, C1, _, _), \+ C1 = thailand,
     city(Next, _, _, _, thailand, _, _).
+
+bad_thai_hop(Here, Next, To) :-
+    city(To, _, _, _, C0, _, _), \+ C0 = thailand,
+    bangkok_airport(Here),
+    city(Next, _, _, _, thailand, _, _).
+bad_thai_hop(_, Next, To) :-
+    bangkok_airport(To),
+    city(Next, _, _, _, thailand, _, _),
+    \+ Next = To.
+bad_thai_hop(_, Next, To) :-
+    city(To, _, _, _, thailand, _, _), \+ bangkok_airport(To),
+    city(Next, _, _, _, thailand, _, _),
+    \+ Next = To, \+ bangkok_airport(Next).
 
 best_routes(From, To, Pref, K, Routes) :-
     bf([r(0, From, start, [From], [])], To, Pref, K, Routes).
@@ -560,6 +576,7 @@ visit(r(_, Here, Clock, Seen, Legs), Rest, To, Pref, K, Routes) :-
             ( flight(Code, Here, Next, Timetable, Minutes, Sample),
               \+ member(Next, Seen),
               \+ back_to_thailand(Here, Next, To),
+              \+ bad_thai_hop(Here, Next, To),
               airline_ok(Code, Here, Next),
               departs(Code, Timetable, HHMM),
               daytime_ok(HHMM),

@@ -14,10 +14,15 @@ def day_date(start: dt.date, day: int) -> dt.date:
     return start + dt.timedelta(days=day - 1)
 
 
-def flight_link(frm: str, to: str, when: dt.date, people: int) -> str:
-    url = f"https://www.aviasales.com/search/{CITY_CODE[frm]}{when:%d%m}{CITY_CODE[to]}{people}"
+def flight_link(frm: str, to: str, when: dt.date, people: int, offer: dict | None = None) -> str:
+    if offer and offer.get("exact") and offer.get("link", "").startswith("/"):
+        url = f"https://www.aviasales.com{offer['link']}"
+        sep = "&" if "?" in url else "?"
+    else:
+        url = f"https://www.aviasales.com/search/{CITY_CODE[frm]}{when:%d%m}{CITY_CODE[to]}{people}"
+        sep = "?"
     m = marker()
-    return f"{url}?marker={urllib.parse.quote(m)}" if m else url
+    return f"{url}{sep}marker={urllib.parse.quote(m)}" if m else url
 
 
 def hotel_link(city: str, country: str, checkin: dt.date, checkout: dt.date, people: int, rooms: int) -> str:

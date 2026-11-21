@@ -276,11 +276,16 @@ class ResultsPanel(QWidget):
             if offer and offer.get("exact"):
                 text += "<br>" + span(f'Real fare that day: {offer["airline"]} {offer["flight"]} at {offer["time"]}, '
                                       f'{baht(offer["price"])}', "ok", 12)
+                code = f'{offer.get("airline", "")} {offer.get("flight", "")}'.strip()
+                btn_text = f"View {code}" if (offer.get("link") and code) else ("View flight" if offer.get("link") else "Search flights")
             elif offer:
                 text += "<br>" + span(f'No fare on record for this day; cheapest that month was '
                                       f'{baht(offer["price"])} on {offer["date"][8:]}/{offer["date"][5:7]}', "ink3", 12)
+                btn_text = "Search flights"
+            else:
+                btn_text = "Search flights"
             row.addWidget(label(text, rich=True, wrap=True), 1)
-            row.addWidget(link("Search flights", booking.flight_link(frm, to, when, people)), 0,
+            row.addWidget(link(btn_text, booking.flight_link(frm, to, when, people, offer)), 0,
                           Qt.AlignmentFlag.AlignVCenter)
             box.addLayout(row)
         country = self.countries[opt["country"]]["name"]

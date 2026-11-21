@@ -296,7 +296,7 @@ const D=[
  <p>Every judgement lives in <code>prolog/trip.pl</code>. Python only collects percepts (the form, live fares) and carries out actions (drawing the plan, the map and the booking links).</p>`,
  extra:`<h3>PEAS table</h3><div class="tbl"><table><thead><tr><th>Element</th><th>For Tang</th><th>Where in the code</th></tr></thead><tbody>
  <tr><td>Performance</td><td>Total cost within budget; flying minutes; number of flights; enjoyment (liked activities); penalty for empty days; visa-free stay respected</td><td><code>plan_key/3</code>, <code>score/3</code>, <code>affordable/3</code>, <code>reasons/11</code></td></tr>
- <tr><td>Environment</td><td>Traveller from Bangkok, Chiang Mai or Phuket; 4 destination countries, 14 cities, 54 flights, ground links, 107 attractions, hotels, seasons, Thai holidays, visa rules; optional Aviasales fares</td><td>Section 1 facts, <code>busy/3</code>, <code>thai_holiday/3</code>, <code>live_fare/3</code></td></tr>
+ <tr><td>Environment</td><td>Traveller from Bangkok (BKK or DMK), Chiang Mai or Phuket; 4 destination countries, 15 cities, 62 flights, 18 ground links, 107 attractions, hotels, seasons, Thai holidays, visa rules; optional Aviasales fares</td><td>Section 1 facts, <code>twin/2</code>, <code>busy/3</code>, <code>thai_holiday/3</code>, <code>live_fare/3</code></td></tr>
  <tr><td>Actuators</td><td>Up to three ranked plans (A/B/C) with ticket, day-by-day plan, cost table and reasons; animated search replay and journey on the map; booking links</td><td><code>ResultsPanel</code>, <code>MapView</code>, <code>ui/booking.py</code></td></tr>
  <tr><td>Sensors</td><td>Trip form (from, to, date, days, people, budget, interests, pace, preference) and extra options; live fares and departure times; cached fares</td><td><code>TangWindow.form</code>, <code>option_terms()</code>, <code>set_live_fares()</code></td></tr>
  </tbody></table></div>
@@ -312,7 +312,7 @@ const D=[
  draw(){
   cls(330,205,240,'Tang Trip Planner','agent',['type: goal- + utility-based','reasoner: SWI-Prolog · trip.pl','body: PySide6 desktop app','bridge: pyswip (planner.py)'],{id:'agent',type:'Agent',doc:'The rational agent. Prolog decides; Python perceives and acts.'});
   cls(40,40,270,'Performance measure','performance',['total cost ≤ budget (฿)','flying minutes (fastest)','number of flights (fewest)','enjoyment: liked activities','penalty: empty days × day cost','visa-free days respected'],{id:'P',type:'Requirement',doc:'Scored by plan_key/3 and score/3. "Balanced" = cost + 10 × minutes − ฿1,500 × enjoyment; "anywhere" ranks countries by cost − ฿3,000 × enjoyment.'});
-  cls(590,40,270,'Environment','environment',['traveller at BKK · CNX · HKT','4 countries · 14 cities','54 flights · 18 ground links','107 attractions · hotels','seasons · Thai holidays · visas','Aviasales fares (optional)'],{id:'E',type:'Requirement',doc:'Section 1 of trip.pl plus the dynamic facts Python asserts before each query.'});
+  cls(590,40,270,'Environment','environment',['traveller at BKK · DMK · CNX · HKT','4 countries · 15 cities','62 flights · 18 ground links','107 attractions · hotels','seasons · Thai holidays · visas','Aviasales fares (optional)'],{id:'E',type:'Requirement',doc:'Section 1 of trip.pl plus the dynamic facts Python asserts before each query.'});
   cls(40,370,270,'Actuators','actuators',['ranked plans A / B / C','ticket · day plan · cost table','reasons for every choice','map: search replay + journey','booking links (flights, hotels)','status ticker'],{id:'A',type:'Requirement',doc:'ResultsPanel.show_plan, MapView.replay / travel and ui/booking.py links.'});
   cls(590,370,270,'Sensors','sensors',['trip form: from · to · date · days','people · budget · interests','pace · preference','options: flights, airlines, hotel…','live_fare/3 · live_departure/2','cache/fares.json'],{id:'S',type:'Requirement',doc:'Form values are whitelisted in Planner.plan and option_terms before they become a Prolog query.'});
   edge([[330,230],[310,170]],{lbl:'measured by',at:[300,206],anc:'end'});
@@ -326,7 +326,7 @@ const D=[
  summary:'What a traveller can do with the agent, and the one external system it talks to.',
  doc:`<p>The traveller is the only human actor. Planning a round trip is the main use case; the others refine the request or consume the answer. Fetching live fares <i>extends</i> planning only when a Travelpayouts token or a fare cache is present. Comparing plans always <i>includes</i> the reasons Prolog produced for each plan.</p>`,
  draw(){
-  actor(100,270,'Traveller',{id:'traveller',doc:'A Thai resident leaving from Bangkok, Chiang Mai or Phuket.'});
+  actor(100,270,'Traveller',{id:'traveller',doc:'A Thai resident leaving from Bangkok (BKK or DMK), Chiang Mai or Phuket.'});
   region(215,40,525,470,'Tang trip planner',{rx:0});
   const ucs=[['plan','Plan a round trip',100,'Main goal: plan_trip/11 returns up to 3 plans.'],['dest','Pick a country or "anywhere"',160,'"anywhere" makes Prolog compare all four countries.'],['prefs','Set budget, interests and pace',220,'Interests steer pick/6; pace moves each city\'s minimum stay.'],['opts','Set extra options',280,'max_flights, airlines, night flights, hotel level, own cities, getting around.'],['cmp','Compare plans A / B / C',340,'Plans differ in their city sets (different/3).'],['watch','Watch search replay and journey',400,'MapView replays explored edges, then flies the plan.'],['book','Open booking links',460,'Aviasales and Booking.com links for each date.']];
   ucs.forEach(([id,t,y,doc])=>{uc(380,y,140,21,t,{id,doc});edge([[125,262],[240,y]],{end:'none'})});
@@ -372,7 +372,7 @@ const D=[
   comp(50,95,170,70,'TangWindow','app.py',{id:'win',doc:'Main window: form, status ticker, search() and the phase state machine.'});
   comp(250,95,160,70,'MapView','ui/map_view.py',{id:'map',doc:'Asia map: replays explored flight edges, flies the plan, zooms the camera.'});
   comp(440,95,170,70,'ResultsPanel','ui/results.py',{id:'res',doc:'Ticket, reasons, day-by-day plan and cost breakdown.'});
-  comp(640,95,130,70,'booking','ui/booking.py',{id:'bk',doc:'Dates and links to Aviasales flights and Booking.com hotels.'});
+  comp(640,95,130,70,'booking','ui/booking.py',{id:'bk',doc:'Dates and links to Aviasales flights (direct View <flight> link on exact matches) and Booking.com hotels.'});
   comp(800,95,120,70,'widgets · theme','ui/',{id:'wt',doc:'Segmented buttons, chips, steppers, colours and stylesheet.'});
   edge([[220,130],[250,130]]);
   edge([[180,95],[180,78],[525,78],[525,95]]);
@@ -384,7 +384,7 @@ const D=[
   pkg(670,235,270,135,'External service');
   comp(690,285,230,70,'Aviasales Data API','api.travelpayouts.com',{id:'api',st:'external',doc:'Cheapest fares found by users in the last 48 hours.'});
   pkg(30,415,610,200,'Knowledge · SWI-Prolog');
-  comp(50,455,570,145,'trip.pl','prolog/trip.pl · 1,252 lines',{id:'kb',top:true,st:'knowledge base',doc:'All reasoning, written with only what Clocksin & Mellish teaches.'});
+  comp(50,455,570,145,'trip.pl','prolog/trip.pl · 1,095 lines',{id:'kb',top:true,st:'knowledge base',doc:'All reasoning, written with only what Clocksin & Mellish teaches.'});
   ['1 Facts','2 Helpers','3 Time','3a Options','3b Prices','4 Search','5 Planning','6 Ranking','7 Reasons','8 API'].forEach((s,i)=>{const x=65+(i%5)*110,y=512+Math.floor(i/5)*44;S.push(`<rect class="shape2" x="${x}" y="${y}" width="100" height="34"/>`+tl(x+50,y+17,s,'s'))});
   pkg(670,415,270,200,'Data files');
   comp(690,462,230,52,'cache/fares.json','',{id:'cache',file:true,doc:'Fetched fares with timestamps; fresh for 24 hours.'});
@@ -578,7 +578,7 @@ const D=[
 {id:'bestfirst',pkg:'alg',kind:'act',name:'Best-first flight search',w:860,h:740,
  summary:'best_routes/5: the book\'s go3 best-first search over flights, with time-zone-aware connections.',
  doc:`<p>The search keeps a queue of partial routes <code>r(Cost, Here, Clock, Visited, Legs)</code> and always extends the cheapest one first (<code>shortest/3</code>). Every cost only grows as a route gets longer, so the first complete route taken off the queue is the best. The search stops after the best two.</p>
- <p>A next flight is legal only if it doesn't revisit a city, doesn't route back through Thailand on the way out, matches the airline and night-flight options, and leaves at least 90 minutes and at most 12 hours after landing. The times are compared in UTC. <code>compare_search/5</code> shows that this does far fewer steps than the depth-first <code>fly/3</code>, which must find and sort every route.</p>`,
+ <p>A next flight is legal only if it doesn't revisit a city, doesn't route back through Thailand on the way out or detour Bangkok departures through domestic airports (<code>back_to_thailand/3</code>, <code>bad_thai_hop/3</code>), matches the airline and night-flight options, and leaves at least 90 minutes and at most 12 hours after landing. The times are compared in UTC. <code>compare_search/5</code> shows that this does far fewer steps than the depth-first <code>fly/3</code>, which must find and sort every route.</p>`,
  draw(){
   init(280,45);
   act(140,68,280,40,'Queue = [r(0, From, start, [From], [])]',{id:'b1'});

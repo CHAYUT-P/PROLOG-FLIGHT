@@ -1,6 +1,6 @@
 # Tang (ทาง) — Asia trip planner in Prolog + Python
 
-Plan a round trip from Thailand (Bangkok, Chiang Mai or Phuket) to Japan,
+Plan a round trip from Thailand (Bangkok BKK & DMK, Chiang Mai or Phuket) to Japan,
 South Korea, China or Singapore: flights with connections, 2–4 cities inside the country, a
 day-by-day plan, the full cost, and the reasons for every choice.
 
@@ -14,7 +14,7 @@ backend/planner.py    pyswip bridge: builds queries, turns answers into Python d
 backend/geo.py        latitude/longitude → map position
 backend/live_prices.py  optional real fares (Aviasales API) → Prolog facts
 app.py                the main window: form, status bar, wiring to Prolog
-ui/booking.py         dates and booking links (Aviasales flights, Booking.com hotels)
+ui/booking.py         dates and booking links (direct Aviasales flight links when available, Booking.com hotels)
 ui/map_view.py        the Asia map: search replay, flying plane, camera zoom
 ui/results.py         the ticket, reasons, day-by-day plan, costs
 ui/widgets.py         small controls (segmented buttons, chips, steppers)
@@ -82,7 +82,9 @@ domestic flights, and **overnight** night buses, night trains and night ferries.
   the cheapest that month) and gives them to Prolog with `assertz` as
   `live_fare(From, To, Price)` facts. When the cheapest flight that day is one
   of our flights, its real time is passed too (`live_departure(Code, HHMM)`), and
-  `departs/3` uses it. Prolog's `flight_price/5` uses a real fare
+  `departs/3` uses it. When an exact-day fare is found, its Aviasales `link`
+  deeplink is saved too so **Book it** links directly to that flight (`View <flight>`),
+  falling back to a route/date search otherwise. Prolog's `flight_price/5` uses a real fare
   when there is one and falls back to the season price otherwise. Fares are
   saved in `cache/fares.json`, so a demo works offline.
 
@@ -96,7 +98,7 @@ domestic flights, and **overnight** night buses, night trains and night ferries.
 
 | Part of `trip.pl` | Book chapter |
 |---|---|
-| Facts: 14 cities, 54 flights, ground transport, 107 attractions, hotels, visas, seasons | ch.1 facts |
+| Facts: 15 cities (including Bangkok BKK & DMK), 13 airports, 62 flights, 18 ground routes, 107 attractions, hotels, visas, seasons | ch.1 facts |
 | `clock_minutes`, `to_utc`, `local_time`, `departure`: times, time zones, layovers | ch.2 arithmetic (`is`, `//`, `mod`) |
 | `listlen`, `last_elem`, `take`, `sum`, `no_dups`, `share` | ch.3 lists, recursion, accumulators |
 | `best_routes/5`, `bf/5`, `shortest/3`: **best-first search** for the best flight route (cheapest / fastest / fewest flights), up to 3 flights | ch.7.9 `go3` best-first search |
@@ -115,9 +117,10 @@ Not used: `format`, `aggregate_all`, `keysort`, `msort`, `length`, `maplist`,
 
 ## Main rules worth presenting
 
-- **Connections:** a change of plane counts only if the next flight leaves at
+- **Connections & Thai hubs:** a change of plane counts only if the next flight leaves at
   least 90 minutes after landing and within 12 hours, worked out in UTC so time
-  zones are handled.
+  zones are handled. `bad_thai_hop/3` prevents Bangkok (`BKK` / `DMK`) trips
+  from detouring through Chiang Mai or Phuket before flying abroad.
 - **Days:** an overnight flight means you land on day 2 (and need one hotel
   night less). Free hours on arrival day = from an hour after landing until 21:00.
 - **Empty days:** a day with nothing planned costs its share of the trip, so
