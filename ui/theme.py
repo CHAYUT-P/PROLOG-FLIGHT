@@ -152,7 +152,6 @@ def stylesheet() -> str:
     /* results */
     #emptyTitle {{ font-size: 26px; font-weight: 800; }}
     #muted {{ color: {c['ink2']}; }}
-    #query {{ font-family: "{MONO}"; font-size: 12px; color: {c['ink2']}; }}
     #notice {{ background: {c['panel']}; border: 1px solid {c['rule']}; border-radius: 6px; padding: 12px 14px; }}
     #error {{ color: {c['danger']}; font-family: "{MONO}"; font-size: 12.5px; border: 1px solid {c['danger']};
               border-radius: 6px; padding: 10px 12px; }}
