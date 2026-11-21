@@ -157,17 +157,9 @@ class ResultsPanel(QWidget):
         self.lay = vbox(22, (24, 22, 24, 24))
         self.setLayout(self.lay)
 
-        self.query = label("", "query", wrap=True)
         self.body = vbox(22)
-        top = vbox(4)
-        top.addWidget(eyebrow("Query"))
-        top.addWidget(self.query)
-        self.lay.addLayout(top)
         self.lay.addLayout(self.body)
         self.lay.addStretch()
-
-    def set_query(self, text: str) -> None:
-        self.query.setText(text)
 
     # ------------------------------------------------------------ simple states
 
@@ -299,7 +291,7 @@ class ResultsPanel(QWidget):
             row = hbox(10)
             text = (span("HOTEL", "ink3", 10.5, family=MONO) + "<br>"
                     + span(escape(c["name"]), "ink", 15, 700) + "&nbsp;&nbsp;"
-                    + span(f'{plural(stay["nights"], "night")} · {checkin:%d %b} – {checkout:%d %b}', "ink2", 13))
+                    + span(f'{plural(stay["nights"], "night")} {checkin:%d %b} – {checkout:%d %b}', "ink2", 13))
             if night:
                 text += "<br>" + span(f"Plan uses about {baht(night)} a night per room", "ink3", 12)
             row.addWidget(label(text, rich=True, wrap=True), 1)
@@ -373,7 +365,7 @@ class ResultsPanel(QWidget):
         box.addWidget(eyebrow(title))
         for leg in legs:
             if leg["wait"]:
-                box.addWidget(label(f'Change in {cs[leg["from"]]["name"]} · {dur(leg["wait"])} between flights', "layover"))
+                box.addWidget(label(f'Change in {cs[leg["from"]]["name"]} {dur(leg["wait"])} between flights', "layover"))
             row = hbox(10)
             code = label(span(escape(leg["code"]), "air", 11.5, 600, MONO), rich=True)
             code.setFixedWidth(56)
@@ -423,7 +415,7 @@ class ResultsPanel(QWidget):
             rail = DayRail(kind, n == len(opt["days"]) - 1)
             inner = vbox(4, (22, 0, 0, 16))
             when = booking.day_date(start, d["day"])
-            head = (span(f'DAY {d["day"]} · {when:%a %d %b}'.upper(), "ink3", 11, family=MONO) + "&nbsp;&nbsp;"
+            head = (span(f'DAY {d["day"]} {when:%a %d %b}'.upper(), "ink3", 11, family=MONO) + "&nbsp;&nbsp;"
                     + span(escape(where), "ink", 15.5, 700))
             if city and kind not in ("home", "fly"):
                 head += "&nbsp;&nbsp;" + span(city["thai"], "ink2", 12, family=THAI)
@@ -433,13 +425,13 @@ class ResultsPanel(QWidget):
                 ride = hbox(8)
                 if t["type"] == "flights":
                     ride.addWidget(Swatch("air"), 0, Qt.AlignmentFlag.AlignVCenter)
-                    text = " · ".join(f'{l["code"]} {l["depart"]} {cs[l["from"]]["code"]} → {l["arrive"]} {cs[l["to"]]["code"]}'
+                    text = ", ".join(f'{l["code"]} {l["depart"]} {cs[l["from"]]["code"]} → {l["arrive"]} {cs[l["to"]]["code"]}'
                                       for l in t["legs"])
                 else:
                     ride.addWidget(Swatch(t["mode"]), 0, Qt.AlignmentFlag.AlignVCenter)
-                    text = f'{GROUND[t["mode"]]} from {cs[t["from"]]["name"]} · {dur(t["minutes"])} · {baht(t["price"])}'
+                    text = f'{GROUND[t["mode"]]} from {cs[t["from"]]["name"]} {dur(t["minutes"])} {baht(t["price"])}'
                     if t["mode"] in OVERNIGHT:
-                        text += " · overnight, arrives in the morning"
+                        text += " overnight, arrives in the morning"
                 ride.addWidget(label(text, "mono", wrap=True), 1)
                 inner.addLayout(ride)
             if d["activities"]:
@@ -454,7 +446,7 @@ class ResultsPanel(QWidget):
 
     @staticmethod
     def _day_activities(acts: list[dict]) -> QWidget:
-        names = " · ".join(a["name"] for a in acts)
+        names = ", ".join(a["name"] for a in acts)
         total = sum(a["fee"] for a in acts)
         fees = baht(total) if total else "Free"
 
@@ -505,7 +497,7 @@ class ResultsPanel(QWidget):
         rows = [("Flights", c["flights"])]
         if c["ground"]:
             rows.append(("Trains, buses & domestic flights", c["ground"]))
-        rows += [(f'Hotels · {plural(m["nights"], "night")} · {plural(m["rooms"], "room")}', c["hotel"]),
+        rows += [(f'Hotels {plural(m["nights"], "night")} {plural(m["rooms"], "room")}', c["hotel"]),
                  ("Food & local transport", c["daily"]), ("Entry fees", c["fees"]), ("Total", c["total"])]
         for k, v in rows:
             total = k == "Total"

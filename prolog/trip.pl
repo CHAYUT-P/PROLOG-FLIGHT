@@ -7,7 +7,6 @@
 :- dynamic(option/2).
 
 %FACTS
-
 country(thailand,    'Thailand',    'ไทย',          0).
 country(japan,       'Japan',       'ญี่ปุ่น',        1500).
 country(korea,       'South Korea', 'เกาหลีใต้',      1200).
@@ -295,7 +294,6 @@ thai_holiday([10],    10, 'the October school break').
 thai_holiday([12, 1], 20, 'New Year').
 
 %HELPERS
-
 listlen([], 0).
 listlen([_ | T], N) :- listlen(T, N0), N is N0 + 1.
 
@@ -352,7 +350,6 @@ enough_time(W, W) :- W >= 90, !.
 enough_time(W, W1) :- W1 is W + 1440.
 
 %OPTIONS — the traveller's extra choices
-
 default_option(max_flights, 3).
 default_option(airlines, any).
 default_option(night_flights, allowed).
@@ -416,7 +413,6 @@ ground_ok(Mode) :- opt(getting_around, fast), \+ overnight(Mode), \+ Mode = bus.
 gateway(City) :- opt(cities, Ms), \+ Ms = [], \+ member(City, Ms).
 
 %PRICES — the month changes what things cost
-
 season_extra(Country, Month, Extra) :-
     findall(P, (busy(Country, Months, P), member(Month, Months)), Ps),
     sum(Ps, Extra).
@@ -466,7 +462,6 @@ set_month(_) :- retract(trip_month(_)), fail.
 set_month(Month) :- assertz(trip_month(Month)).
 
 %SEARCH
-
 reset_search :-
     retract_all_explored,
     assertz(steps(0)).
@@ -514,7 +509,6 @@ flight_key(fewest,   Legs, K) :- listlen(Legs, N), legs_price(Legs, P), K is N *
 flight_key(balanced, Legs, K) :- legs_price(Legs, P), legs_minutes(Legs, M), K is P + M * 10.
 
 %BEST-FIRST SEARCH 
-
 path_cost(cheapest, Legs, C) :- legs_price(Legs, C).
 path_cost(fastest,  Legs, C) :- elapsed(Legs, C).
 path_cost(fewest,   Legs, C) :- listlen(Legs, N), legs_price(Legs, P), C is N * 1000000 + P.
@@ -634,7 +628,6 @@ tour(Here, Max, Trail, [Next | Cities], [move(Here, Next, Mode, Price, Minutes) 
     tour(Next, Max, [Next | Trail], Cities, Moves).
 
 %PLANNING — days, activities and money
-
 likes(Cat, Interests) :- member(Cat, Interests).
 
 matches(City, Interests, N) :-
@@ -977,7 +970,6 @@ extra_reason(Country, _, Month, _, _, _, _, _, [warning, Country, What]) :-
     warning(Country, What, Months), member(Month, Months).
 
 %API 
-
 normalize_interests([], All) :- !, findall(I, interest(I), All).
 normalize_interests(Is, Is).
 

@@ -112,7 +112,6 @@ class TangWindow(QMainWindow):
 
         self.map.country_picked.connect(lambda c: self.update_form(to=c))
         self.map.set_focus(self.form["to"])
-        self.refresh_query()
         self.results.show_message("Where to?", "Pick a country, or click one on the map, and set your days and budget. "
                                   "Prolog searches every flight connection, plans the cities and days, and explains "
                                   "why it picked each trip.")
@@ -339,7 +338,6 @@ class TangWindow(QMainWindow):
             self.return_label.setText(f"{self.back_date():%a %d %b %Y}")
         if "budget" in changes:
             self.budget_label.setText(baht(self.form["budget"]))
-        self.refresh_query()
 
     def _fill_cities(self) -> None:
         while self.city_flow.count():
@@ -380,12 +378,6 @@ class TangWindow(QMainWindow):
 
     def options(self, f: dict) -> dict:
         return {k: f[k] for k in ("max_flights", "airlines", "night_flights", "hotel", "cities", "getting_around")}
-
-    def refresh_query(self) -> None:
-        f = self.form
-        opts = ",".join(self.planner.option_terms(self.options(f), f["to"]))
-        self.results.set_query(f'?- plan_trip({f["from"]}, {f["to"]}, {f["days"]}, {f["month"]}, {f["people"]}, '
-                               f'{f["budget"]}, [{",".join(f["interests"])}], {f["pace"]}, {f["pref"]}, [{opts}], Plan).')
 
     def set_ticker(self, html: str, state: str) -> None:
         self.ticker.setText(html)
