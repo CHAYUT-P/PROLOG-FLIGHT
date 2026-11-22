@@ -123,17 +123,18 @@ class Planner:
         people = max(1, min(6, int(people)))
         budget = max(0, int(budget))
 
-        opts = self.option_terms(options or {}, destination)
-        query = (
-            f"plan_trip({origin}, {destination}, {days}, {month}, {people}, {budget}, "
-            f"[{','.join(interests)}], {pace}, {preference}, [{','.join(opts)}], Result)"
-        )
+        options = options or {}
+        query = self._query(origin, destination, days, month, people, budget, interests, pace,
+                            preference, options)
         res = self._one(query)
         if res is None:
             raise PlannerError("Prolog could not answer that query.")
         stats, rows = res["Result"]
         steps, edges, flight_options, plans, affordable = stats
-        options = [self._option(r, preference) for r in rows]
+        found = [self._option(r, preference) for r in rows]
+        trip = dict(origin=origin, destination=destination, days=days, month=month, people=people,
+                    budget=budget, interests=interests, pace=pace, preference=preference,
+                    options=options)
         return {
             "query": query,
             "stats": {
@@ -143,9 +144,21 @@ class Planner:
                 "plans": plans,
                 "affordable": affordable,
             },
-            "options": options,
-            "empty_reason": self._empty_reason(origin, destination, flight_options, plans, days, pace),
+            "options": found,
+            "empty_reason": self._empty_reason(trip, flight_options, plans),
         }
+
+    def _query(self, origin, destination, days, month, people, budget, interests, pace, preference,
+               options: dict) -> str:
+        opts = self.option_terms(options, destination)
+        return (
+            f"plan_trip({origin}, {destination}, {days}, {month}, {people}, {budget}, "
+            f"[{','.join(interests)}], {pace}, {preference}, [{','.join(opts)}], Result)"
+        )
+
+    def _count_plans(self, trip: dict) -> int:
+        res = self._one(self._query(**trip))
+        return res["Result"][0][3] if res else 0
 
     def option_terms(self, options: dict, destination: str) -> list[str]:
         terms = []
@@ -306,16 +319,51 @@ class Planner:
             return f"{a[0]} free day{'s' if a[0] != 1 else ''}. Not enough places on the list to fill them"
         return " ".join(str(x) for x in r)
 
-    def _empty_reason(self, origin, destination, flight_options, plans, days, pace) -> str | None:
+    def _empty_reason(self, trip: dict, flight_options: int, plans: int) -> str | None:
+        if plans > 0:
+            return None
+        days, pace, options = trip["days"], trip["pace"], trip["options"]
+        picked = [c for c in options.get("cities", []) if c in self.cities]
         if flight_options == 0:
-            where = "any country" if destination == "anywhere" else self.countries[destination]["name"]
-            return (f"No flights from {self._name(origin)} reach {where} with these flight options. "
-                    "Try allowing more changes, any airline, or night flights.")
-        if plans == 0:
-            return (f"No plan fits {days} days at a {pace} pace with these options. "
-                    "Add days, choose a faster pace, allow more flight changes or any airline, "
-                    "or pick different cities.")
-        return None
+            where = "any country" if trip["destination"] == "anywhere" else self.countries[trip["destination"]]["name"]
+            limited = any(options.get(k) in v for k, v in
+                          (("max_flights", (1, 2)), ("airlines", ("budget", "full")), ("night_flights", ("avoid",))))
+            problem = (f"No flights from {self._name(trip['origin'])} reach {where}"
+                       + (" with these flight options." if limited else "."))
+        else:
+            where = self._list([self._name(c) for c in picked], "and") if picked else "this country"
+            problem = f"{days} days at a {pace} pace is not enough time for {where} with these options."
+
+        tries = []
+        if pace != "packed":
+            tries.append(("change to a packed pace", {"pace": "packed"}))
+        if options.get("max_flights") in (1, 2):
+            tries.append(("allow more flight changes", {"options": {**options, "max_flights": 3}}))
+        if options.get("airlines") in ("budget", "full"):
+            tries.append(("allow any airline", {"options": {**options, "airlines": "any"}}))
+        if options.get("night_flights") == "avoid":
+            tries.append(("allow night flights", {"options": {**options, "night_flights": "allowed"}}))
+        if len(picked) > 1:
+            tries.append(("let Prolog choose the cities", {"options": {**options, "cities": []}}))
+        twin = {"bangkok": "don_mueang", "don_mueang": "bangkok"}.get(trip["origin"])
+        if twin:
+            tries.append((f"fly from {self._name(twin)}", {"origin": twin}))
+        works = [name for name, change in tries if self._count_plans({**trip, **change})]
+        for more in range(days + 1, 22):
+            if self._count_plans({**trip, "days": more}):
+                works.append(f"take {more} days")
+                break
+
+        if not works:
+            if flight_options == 0:
+                return (f"Tang has no flight route from {self._name(trip['origin'])} to {where}. "
+                        "Try another departure airport or destination.")
+            return problem + " Try a different destination or other options."
+        return f"{problem} Prolog finds plans if you {self._list(works, 'or')}."
+
+    @staticmethod
+    def _list(items: list[str], word: str) -> str:
+        return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" {word} " + items[-1]
 
 
 _planner: Planner | None = None
