@@ -66,11 +66,24 @@ def _fetch_one(key: str, origin: str, dest: str, month: str, tok: str) -> tuple[
     offers = [x for x in body.get("data", []) if x.get("price")]
     if not offers:
         return key, {"price": -1}
-    best = min(offers, key=lambda x: x["price"])
+    offers.sort(key=lambda x: x["price"])
+    by_airline: dict[str, dict] = {}
+    for item in offers:
+        al = item.get("airline", "")
+        if al and al not in by_airline:
+            w = item.get("departure_at", "")
+            by_airline[al] = {
+                "price": int(item["price"]), "date": w[:10], "time": w[11:16],
+                "airline": al, "flight": str(item.get("flight_number", "")),
+                "link": item.get("link", ""),
+            }
+        if len(by_airline) >= 5:
+            break
+    best = offers[0]
     when = best.get("departure_at", "")
     return key, {"price": int(best["price"]), "date": when[:10], "time": when[11:16],
                  "airline": best.get("airline", ""), "flight": str(best.get("flight_number", "")),
-                 "link": best.get("link", "")}
+                 "link": best.get("link", ""), "airlines": list(by_airline.values())}
 
 
 def _refresh(keys: list[str], cache: dict, tok: str | None) -> bool:
@@ -80,7 +93,7 @@ def _refresh(keys: list[str], cache: dict, tok: str | None) -> bool:
         hit = cache.get(key)
         if not hit:
             return False
-        if tok and hit.get("price", -1) > 0 and "link" not in hit:
+        if tok and hit.get("price", -1) > 0 and ("link" not in hit or "airlines" not in hit):
             return False
         return now - dt.datetime.fromisoformat(hit["at"]) < dt.timedelta(hours=FRESH_HOURS)
 
@@ -114,19 +127,23 @@ def fares_for(outbound: list[tuple[str, str]], inbound: list[tuple[str, str]],
     missing = [m for _, d, m in jobs if not (cache.get(d) and cache[d]["price"] > 0)]
     got_months = _refresh(missing, cache, tok)
 
-    fares, offers = {}, {}
+    fares, offers, airline_offers = {}, {}, {}
     for pair, day_key, month_key in jobs:
         for key, exact in ((day_key, True), (month_key, False)):
             hit = cache.get(key)
             if hit and hit["price"] > 0:
                 fares[pair] = hit["price"]
                 offers[pair] = {**hit, "exact": exact}
+                al_list = hit.get("airlines") or [
+                    {k: hit.get(k, "") for k in ("price", "date", "time", "airline", "flight", "link")}
+                ]
+                airline_offers[pair] = [{**a, "exact": exact} for a in al_list if a.get("price", 0) > 0]
                 break
     if tok:
         status = "live" if (got_days or got_months or fares) else "cache"
     else:
         status = "cache" if fares else "off"
-    return {"status": status, "fares": fares, "offers": offers}
+    return {"status": status, "fares": fares, "offers": offers, "airline_offers": airline_offers}
 
 
 def marker() -> str | None:

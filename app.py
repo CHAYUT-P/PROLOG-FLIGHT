@@ -22,8 +22,6 @@ from widgets import (
     Chip, DatePicker, FlowLayout, Segmented, StationCard, Stepper, chips_box, eyebrow, field, hbox, label, vbox,
 )
 
-HOMES = [("bangkok", "BKK\nSuvarnabhumi"), ("don_mueang", "DMK\nDon Mueang"),
-         ("chiang_mai", "CNX\nChiang Mai"), ("phuket", "HKT\nPhuket")]
 INTERESTS = [("food", "Food"), ("culture", "Temples && history"), ("nature", "Nature"), ("beach", "Beaches"),
              ("shopping", "Shopping"), ("adventure", "Adventure"), ("nightlife", "Nightlife")]
 PACES = [("relaxed", "Relaxed\nfewer cities,\nlonger stays"), ("normal", "Normal\nthe usual stay"),
@@ -31,7 +29,6 @@ PACES = [("relaxed", "Relaxed\nfewer cities,\nlonger stays"), ("normal", "Normal
 PREFS = [("cheapest", "Cheapest"), ("fastest", "Least flying"), ("fewest", "Fewest flights"), ("balanced", "Balanced")]
 STOPS = [("1", "Direct only"), ("2", "1 change"), ("3", "2 changes")]
 AIRLINES = [("any", "Any"), ("budget", "Budget only"), ("full", "Full-service")]
-HOTELS = [("budget", "Budget"), ("mid", "Mid-range"), ("luxury", "Luxury")]
 AROUND = [("any", "Any"), ("fast", "Fast"), ("no_night", "No night rides")]
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 FARES = {"live": "live fares", "cache": "saved fares", "none": "no live fares, sample prices",
@@ -59,7 +56,7 @@ class TangWindow(QMainWindow):
         leave = dt.date.today() + dt.timedelta(days=30)
         self.form = {"from": "bangkok", "to": "japan", "date": leave, "month": leave.month, "days": 7,
                      "people": 2, "budget": 90000, "max_flights": 3, "airlines": "any", "night_flights": "allowed",
-                     "hotel": "mid", "cities": [], "getting_around": "any",
+                     "cities": [], "getting_around": "any",
                      "interests": ["food", "culture"], "pace": "normal", "pref": "cheapest"}
         self.phase = "idle"
         self.pool = ThreadPoolExecutor(max_workers=1)
@@ -236,12 +233,16 @@ class TangWindow(QMainWindow):
         lay = vbox(20, (24, 22, 24, 24))
         w.setLayout(lay)
 
-        homes = Segmented(HOMES, self.form["from"], columns=2)
-        homes.changed.connect(lambda v: self.update_form(**{"from": v}))
-        lay.addWidget(field("Fly from", homes))
+        home_options = [
+            (c["id"], f'{c["code"]} · {c["name"]}', f'{c["thai"]} · {self.countries[c["country"]]["name"]}')
+            for c in self.data["cities"] if c["zone"] is not None
+        ]
+        self.home_station = StationCard(home_options)
+        self.home_station.picked.connect(lambda v: self.update_form(**{"from": v}))
+        lay.addWidget(field("Fly from", self.home_station))
 
         options = [("anywhere", "Anywhere (Prolog picks)", "ให้ Prolog เลือก · let Prolog choose")] + [
-            (c["id"], c["name"], c["thai"]) for c in self.data["countries"] if c["id"] != "thailand"]
+            (c["id"], c["name"], c["thai"]) for c in self.data["countries"]]
         self.station = StationCard(options)
         self.station.picked.connect(lambda v: self.update_form(to=v))
         lay.addWidget(self.station)
@@ -294,10 +295,6 @@ class TangWindow(QMainWindow):
         airlines.changed.connect(lambda v: self.update_form(airlines=v))
         lay.addWidget(field("Airlines", airlines))
 
-        hotel = Segmented(HOTELS, self.form["hotel"])
-        hotel.changed.connect(lambda v: self.update_form(hotel=v))
-        lay.addWidget(field("Hotels", hotel))
-
         around = Segmented(AROUND, self.form["getting_around"])
         around.changed.connect(lambda v: self.update_form(getting_around=v))
         lay.addWidget(field("Getting around", around,
@@ -319,6 +316,7 @@ class TangWindow(QMainWindow):
         self.go.clicked.connect(self.search)
         lay.addWidget(self.go)
         lay.addStretch()
+        self._show_origin()
         self._show_destination()
         self.interest_hint.setVisible(not self.form["interests"])
         return w
@@ -329,6 +327,14 @@ class TangWindow(QMainWindow):
         if "to" in changes and self.phase in ("searching", "travelling"):
             return
         self.form.update(changes)
+        if "from" in changes:
+            self._show_origin()
+            if self.form["to"] == self.cities[self.form["from"]]["country"]:
+                self.form["to"] = "anywhere"
+                self._show_destination()
+                self.map.set_focus(self.form["to"])
+                self.form["cities"] = []
+                self._fill_cities()
         if "to" in changes:
             self._show_destination()
             self.map.set_focus(self.form["to"])
@@ -365,6 +371,10 @@ class TangWindow(QMainWindow):
         self.update_form(interests=items)
         self.interest_hint.setVisible(not items)
 
+    def _show_origin(self) -> None:
+        c = self.cities[self.form["from"]]
+        self.home_station.show_value(f'{c["code"]} · {c["name"]}', f'{c["thai"]} · {self.countries[c["country"]]["name"]}')
+
     def _show_destination(self) -> None:
         c = self.countries.get(self.form["to"])
         if c:
@@ -377,7 +387,7 @@ class TangWindow(QMainWindow):
         return f["date"] + dt.timedelta(days=f["days"] - 1)
 
     def options(self, f: dict) -> dict:
-        return {k: f[k] for k in ("max_flights", "airlines", "night_flights", "hotel", "cities", "getting_around")}
+        return {k: f[k] for k in ("max_flights", "airlines", "night_flights", "cities", "getting_around")}
 
     def set_ticker(self, html: str, state: str) -> None:
         self.ticker.setText(html)
@@ -420,7 +430,7 @@ class TangWindow(QMainWindow):
                     got = job.result()
                     self.fare_status = got["status"] if got["fares"] else "none"
                     self.offers = got.get("offers", {})
-                    self.planner.set_live_fares(got["fares"], self.offers)
+                    self.planner.set_live_fares(got["fares"], self.offers, got.get("airline_offers"))
                 except Exception:
                     self.fare_status = "error"
                     self.planner.set_live_fares({})

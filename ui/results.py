@@ -7,7 +7,7 @@ from typing import Callable
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QPainter, QPen
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 import booking
@@ -191,8 +191,9 @@ class ResultsPanel(QWidget):
         opts = result["options"]
         opt = opts[selected]
         start = booking.start_date(searched)
+        self._refresh_args = (result, selected, full, searched, on_select, offers)
         self.body.addLayout(self._compare(opts, selected, on_select))
-        self.body.addWidget(self._ticket(opt, searched["people"]))
+        self.body.addWidget(self._ticket(opt, searched["people"], searched["budget"]))
         if full:
             cols = hbox(28)
             left, right = vbox(24), vbox(0)
@@ -249,7 +250,7 @@ class ResultsPanel(QWidget):
 
     def _booking(self, opt: dict, start: dt.date, searched: dict, offers: dict) -> QVBoxLayout:
         cs = self.cities
-        people, rooms = searched["people"], opt["meta"]["rooms"]
+        people = searched["people"]
         box = vbox(8)
         box.addWidget(label("Book it", "sectionTitle"))
         box.addWidget(label("Opens in your web browser. Prices there are live and may differ from the plan.", "fine",
@@ -280,27 +281,28 @@ class ResultsPanel(QWidget):
             row.addWidget(link(btn_text, booking.flight_link(frm, to, when, people, offer)), 0,
                           Qt.AlignmentFlag.AlignVCenter)
             box.addLayout(row)
-        country = self.countries[opt["country"]]["name"]
-        for stay in booking.stays(opt):
-            c = cs[stay["city"]]
-            checkin = booking.day_date(start, stay["first"])
-            checkout = booking.day_date(start, stay["first"] + stay["nights"])
-            if stay["nights"] == 0:
-                continue
-            night = opt.get("roomPrice", {}).get(stay["city"])
-            row = hbox(10)
-            text = (span("HOTEL", "ink3", 10.5, family=MONO) + "<br>"
-                    + span(escape(c["name"]), "ink", 15, 700) + "&nbsp;&nbsp;"
-                    + span(f'{plural(stay["nights"], "night")} {checkin:%d %b} – {checkout:%d %b}', "ink2", 13))
-            if night:
-                text += "<br>" + span(f"Plan uses about {baht(night)} a night per room", "ink3", 12)
-            row.addWidget(label(text, rich=True, wrap=True), 1)
-            row.addWidget(link("Find hotels", booking.hotel_link(c["name"], country, checkin, checkout, people, rooms)),
-                          0, Qt.AlignmentFlag.AlignVCenter)
-            box.addLayout(row)
         return box
 
-    def _ticket(self, opt: dict, people: int) -> QFrame:
+    def _pick_airline(self, opt: dict, leg: dict, choice: dict, people: int, budget: int) -> None:
+        for k in ("code", "airlineName", "airlineTier", "depart", "arrive", "price", "minutes"):
+            leg[k] = choice[k]
+        if leg["departDay"] == 0:
+            leg["arriveDay"] = choice["arriveDay"]
+        flights_pp = sum(l["price"] for l in opt["outbound"] + opt["inbound"])
+        opt["cost"]["flights"] = flights_pp * people
+        opt["cost"]["total"] = (opt["cost"]["flights"] + opt["cost"]["ground"]
+                                + opt["cost"]["daily"] + opt["cost"]["fees"])
+        opt["fits"] = opt["cost"]["total"] <= budget
+        opt["meta"]["flightMinutes"] = sum(l["minutes"] for l in opt["outbound"] + opt["inbound"])
+        for d in opt["days"]:
+            if d["travel"] and d["travel"]["type"] == "flights":
+                for dl in d["travel"]["legs"]:
+                    if dl["from"] == leg["from"] and dl["to"] == leg["to"]:
+                        for k in ("code", "airlineName", "airlineTier", "depart", "arrive", "price", "minutes"):
+                            dl[k] = choice[k]
+        self.show_plan(*self._refresh_args)
+
+    def _ticket(self, opt: dict, people: int, budget: int = 0) -> QFrame:
         cs = self.cities
         home = cs[opt["outbound"][0]["from"]]
         country = self.countries[opt["country"]]
@@ -354,12 +356,12 @@ class ResultsPanel(QWidget):
             facts.addWidget(label(v, "factValue"), 1, i)
         lay.addLayout(facts)
         lay.addWidget(Perforation())
-        lay.addLayout(self._flights("Going", opt["outbound"]))
+        lay.addLayout(self._flights("Going", opt, opt["outbound"], people, budget))
         lay.addSpacing(8)
-        lay.addLayout(self._flights("Coming home", opt["inbound"]))
+        lay.addLayout(self._flights("Coming home", opt, opt["inbound"], people, budget))
         return ticket
 
-    def _flights(self, title: str, legs: list[dict]) -> QVBoxLayout:
+    def _flights(self, title: str, opt: dict, legs: list[dict], people: int, budget: int) -> QVBoxLayout:
         cs = self.cities
         box = vbox(4, (18, 8, 18, 0))
         box.addWidget(eyebrow(title))
@@ -367,8 +369,11 @@ class ResultsPanel(QWidget):
             if leg["wait"]:
                 box.addWidget(label(f'Change in {cs[leg["from"]]["name"]} {dur(leg["wait"])} between flights', "layover"))
             row = hbox(10)
-            code = label(span(escape(leg["code"]), "air", 11.5, 600, MONO), rich=True)
-            code.setFixedWidth(56)
+            tier = "Budget" if leg.get("airlineTier") == "budget" else "Full-service"
+            airline_label = leg.get("airlineName") or leg["code"]
+            code = label(span(escape(airline_label), "ink", 11.5, 700) + "<br>"
+                         + span(f'{escape(leg["code"])} · {tier}', "air", 10.5, 600, MONO), rich=True)
+            code.setFixedWidth(132)
             plus = leg["arriveDay"] - leg["departDay"]
             dep = label(span(leg["depart"], "ink", 16, 700, MONO) + "<br>" + span(cs[leg["from"]]["code"], "ink2", 11.5, family=MONO), rich=True)
             arr = label(span(leg["arrive"], "ink", 16, 700, MONO)
@@ -384,6 +389,18 @@ class ResultsPanel(QWidget):
             row.addWidget(arr)
             row.addWidget(price)
             box.addLayout(row)
+            choices = leg.get("choices") or []
+            if len(choices) > 1:
+                pick = QComboBox()
+                for c in choices:
+                    t = "Budget" if c["airlineTier"] == "budget" else "Full"
+                    pick.addItem(f'{c["airlineName"]} ({c["code"]} · {t}) · {c["depart"]}–{c["arrive"]} · {baht(c["price"])}', c)
+                idx = next((i for i, c in enumerate(choices) if c["code"] == leg["code"]), 0)
+                pick.setCurrentIndex(idx)
+                pick.currentIndexChanged.connect(
+                    lambda i, o=opt, l=leg, cb=pick, p=people, b=budget: self._pick_airline(o, l, cb.itemData(i), p, b)
+                )
+                box.addWidget(pick)
         return box
 
     def _notes(self, notes: list[dict]) -> QVBoxLayout:
@@ -435,17 +452,20 @@ class ResultsPanel(QWidget):
                 ride.addWidget(label(text, "mono", wrap=True), 1)
                 inner.addLayout(ride)
             if d["activities"]:
-                inner.addWidget(self._day_activities(d["activities"]))
+                inner.addWidget(self._day_activities(d["activities"], d.get("alternatives", [])))
             else:
                 text = {"free": "Free day: nothing left on the list here, so wander or rest.",
                         "air": "Overnight in the air.", "fly": "Travel day.", "home": "Travel day."}.get(kind, "Arrive and settle in.")
                 inner.addWidget(label(span(text, "ink3", 13), rich=True))
+                if d.get("alternatives"):
+                    alt_text = " · ".join(f'{a["name"]} ({a["category"]})' for a in d["alternatives"])
+                    inner.addWidget(label(span(f"Nearby options: {escape(alt_text)}", "ink3", 12), rich=True, wrap=True))
             rail.setLayout(inner)
             box.addWidget(rail)
         return box
 
     @staticmethod
-    def _day_activities(acts: list[dict]) -> QWidget:
+    def _day_activities(acts: list[dict], alts: list[dict] | None = None) -> QWidget:
         names = ", ".join(a["name"] for a in acts)
         total = sum(a["fee"] for a in acts)
         fees = baht(total) if total else "Free"
@@ -453,7 +473,7 @@ class ResultsPanel(QWidget):
         box = QWidget()
         lay = vbox(4)
         row = Clickable("daySummary")
-        row.setToolTip("Show each activity's price")
+        row.setToolTip("Show activity details & alternatives")
         line = hbox(10)
         text = label(span(escape(names), "ink2", 13.5), wrap=True, rich=True)
         line.addWidget(text, 1)
@@ -467,13 +487,26 @@ class ResultsPanel(QWidget):
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(3)
+        grid.setVerticalSpacing(5)
+        slot_label = {"morning": "Morning", "afternoon": "Afternoon", "evening": "Evening",
+                      "all_day": "All day", "any": "Flexible"}
         for r, a in enumerate(acts):
-            grid.addWidget(label(a["name"], wrap=True), r, 0)
+            zone = str(a.get("zone", "")).replace("_", " ").title()
+            slot = slot_label.get(a.get("slot", ""), "")
+            meta = " · ".join(x for x in (slot, a.get("category", "").title(), zone, f'{a["hours"]:g}h') if x)
+            desc = a.get("details", "")
+            info_html = (span(escape(a["name"]), "ink", 13, 600) + "<br>"
+                         + span(escape(meta), "ink3", 11, family=MONO)
+                         + (("<br>" + span(escape(desc), "ink2", 12)) if desc else ""))
+            grid.addWidget(label(info_html, rich=True, wrap=True), r, 0)
             fee = label(span(baht(a["fee"]) if a["fee"] else "Free", "ink2", 12.5, family=MONO), rich=True)
             fee.setMinimumWidth(56)
-            fee.setAlignment(Qt.AlignmentFlag.AlignRight)
+            fee.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
             grid.addWidget(fee, r, 1)
+        if alts:
+            alt_lines = [f'{escape(x["name"])} ({escape(x["category"])}, {x["hours"]:g}h)' for x in alts]
+            alt_html = span("Alternatives: ", "ink3", 11.5, 700, MONO) + span(" · ".join(alt_lines), "ink3", 12)
+            grid.addWidget(label(alt_html, rich=True, wrap=True), len(acts), 0, 1, 2)
         grid.setColumnStretch(0, 1)
         detail.setLayout(grid)
         detail.hide()
@@ -490,15 +523,14 @@ class ResultsPanel(QWidget):
         return box
 
     def _costs(self, opt: dict, budget: int, people: int) -> QVBoxLayout:
-        c, m = opt["cost"], opt["meta"]
+        c = opt["cost"]
         box = vbox(0)
         box.addWidget(label(f'Cost for {plural(people, "person", "people")}', "sectionTitle"))
         box.addSpacing(8)
         rows = [("Flights", c["flights"])]
         if c["ground"]:
             rows.append(("Trains, buses & domestic flights", c["ground"]))
-        rows += [(f'Hotels {plural(m["nights"], "night")} {plural(m["rooms"], "room")}', c["hotel"]),
-                 ("Food & local transport", c["daily"]), ("Entry fees", c["fees"]), ("Total", c["total"])]
+        rows += [("Food & local transport", c["daily"]), ("Entry fees", c["fees"]), ("Total", c["total"])]
         for k, v in rows:
             total = k == "Total"
             row = QHBoxLayout()

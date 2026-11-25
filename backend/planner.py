@@ -48,6 +48,7 @@ class Planner:
         self._map = self._load_map()
         self.cities = {c["id"]: c for c in self._map["cities"]}
         self.countries = {c["id"]: c for c in self._map["countries"]}
+        self.airports = {c["id"] for c in self._map["cities"] if c["zone"] is not None}
 
 
     def _one(self, query: str) -> dict | None:
@@ -84,9 +85,10 @@ class Planner:
         return self._map
 
     def fare_routes(self, origin: str, destination: str) -> tuple[list, list]:
-        countries = ({c for c in self.countries if c != "thailand"} if destination == "anywhere" else {destination})
+        origin_country = self.cities[origin]["country"]
+        countries = ({c for c in self.countries if c != origin_country} if destination == "anywhere" else {destination})
         targets = {c["id"] for c in self._map["cities"] if c["country"] in countries}
-        ends = {origin, "bangkok", "don_mueang"}
+        ends = {c["id"] for c in self._map["cities"] if c["country"] == origin_country and c["zone"] is not None}
         pairs = set()
         for f in self._map["flights"]:
             a, b = f["from"], f["to"]
@@ -96,24 +98,42 @@ class Planner:
         inbound = sorted(p for p in pairs if p not in outbound)
         return outbound, inbound
 
-    def set_live_fares(self, fares: dict[tuple[str, str], int], offers: dict | None = None) -> None:
+    def set_live_fares(self, fares: dict[tuple[str, str], int], offers: dict | None = None,
+                       airline_offers: dict | None = None) -> None:
         list(self.prolog.query("clear_live"))
         for (a, b), price in fares.items():
             if a in self.cities and b in self.cities:
                 self.prolog.assertz(f"live_fare({a}, {b}, {int(price)})")
-        known = {(f["code"], f["from"], f["to"]) for f in self._map["flights"]}
+        known = {(f["code"], f["from"], f["to"]): f["depart"] for f in self._map["flights"]}
         for (a, b), offer in (offers or {}).items():
             code = f'{offer.get("airline", "")}{offer.get("flight", "")}'
             time = offer.get("time", "")
             if offer.get("exact") and (code, a, b) in known and len(time) == 5:
                 self.prolog.assertz(f"live_departure('{code}', {int(time[:2]) * 100 + int(time[3:])})")
+        for (a, b), items in (airline_offers or {}).items():
+            if a not in self.cities or b not in self.cities:
+                continue
+            for item in items:
+                al = item.get("airline", "").strip()
+                fl = item.get("flight", "").strip()
+                price = int(item.get("price", 0))
+                if not al or price <= 0:
+                    continue
+                code = f"{al}{fl}" if fl else al
+                time = item.get("time", "")
+                if len(time) == 5 and time[2] == ":":
+                    hhmm = int(time[:2]) * 100 + int(time[3:])
+                else:
+                    hhmm = known.get((code, a, b), 1000)
+                self.prolog.assertz(f"live_offer({a}, {b}, '{al}', '{code}', {hhmm}, {price})")
 
     def plan(self, origin, destination, days, month, people, budget, interests, pace, preference,
              options: dict | None = None) -> dict:
-        if origin not in HOMES:
-            raise PlannerError("Start from Bangkok (BKK or DMK), Chiang Mai or Phuket.")
-        if destination != "anywhere" and (destination not in self.countries or destination == "thailand"):
-            raise PlannerError("Unknown destination.")
+        if origin not in self.airports:
+            raise PlannerError("Choose a departure city with an airport.")
+        origin_country = self.cities[origin]["country"]
+        if destination != "anywhere" and (destination not in self.countries or destination == origin_country):
+            raise PlannerError("Choose a destination country different from your departure country.")
         if any(i not in INTERESTS for i in interests):
             raise PlannerError("Unknown interest.")
         if pace not in PACES or preference not in PREFERENCES:
@@ -131,7 +151,8 @@ class Planner:
             raise PlannerError("Prolog could not answer that query.")
         stats, rows = res["Result"]
         steps, edges, flight_options, plans, affordable = stats
-        found = [self._option(r, preference) for r in rows]
+        choice_cache: dict[tuple[str, str], list[dict]] = {}
+        found = [self._option(r, preference, origin, choice_cache) for r in rows]
         trip = dict(origin=origin, destination=destination, days=days, month=month, people=people,
                     budget=budget, interests=interests, pace=pace, preference=preference,
                     options=options)
@@ -168,8 +189,6 @@ class Planner:
             terms.append(f'airlines({options["airlines"]})')
         if options.get("night_flights") == "avoid":
             terms.append("night_flights(avoid)")
-        if options.get("hotel") in ("budget", "luxury"):
-            terms.append(f'hotel({options["hotel"]})')
         if options.get("getting_around") in ("fast", "no_night"):
             terms.append(f'getting_around({options["getting_around"]})')
         picked = [c for c in options.get("cities", []) if c in self.cities
@@ -187,27 +206,49 @@ class Planner:
         day, clock = divmod(local, 1440)
         return f"{clock // 60:02d}:{clock % 60:02d}", day
 
-    def _legs(self, rows) -> list[dict]:
+    def _route_choices(self, origin: str, frm: str, to: str, cache: dict) -> list[dict]:
+        key = (frm, to)
+        if key in cache:
+            return cache[key]
+        res = self._one(f"route_choices({origin}, {frm}, {to}, Choices)")
+        out = []
+        for code, airline_name, airline_tier, dep, arr, price in (res["Choices"] if res else []):
+            dep_clock, dep_day = self._clock(frm, dep)
+            arr_clock, arr_day = self._clock(to, arr)
+            out.append({
+                "code": code, "airlineName": airline_name, "airlineTier": airline_tier,
+                "price": price, "minutes": arr - dep,
+                "depart": dep_clock, "arrive": arr_clock,
+                "departDay": 0, "arriveDay": arr_day - dep_day,
+            })
+        cache[key] = out
+        return out
+
+    def _legs(self, rows, origin: str | None = None, choice_cache: dict | None = None) -> list[dict]:
         legs = []
         first_day = None
-        for code, frm, to, dep, arr, price, wait in rows:
+        for code, airline_name, airline_tier, frm, to, dep, arr, price, wait in rows:
             dep_clock, dep_day = self._clock(frm, dep)
             arr_clock, arr_day = self._clock(to, arr)
             if first_day is None:
                 first_day = dep_day
+            choices = (self._route_choices(origin, frm, to, choice_cache)
+                       if (origin is not None and choice_cache is not None) else [])
             legs.append({
-                "code": code, "from": frm, "to": to, "price": price, "wait": wait,
+                "code": code, "airlineName": airline_name, "airlineTier": airline_tier,
+                "from": frm, "to": to, "price": price, "wait": wait,
                 "minutes": arr - dep,
                 "depart": dep_clock, "arrive": arr_clock,
                 "departDay": dep_day - first_day, "arriveDay": arr_day - first_day,
+                "choices": choices,
             })
         return legs
 
-    def _option(self, row, preference) -> dict:
-        country, out, cities, moves, ret, days, cost, fits, reasons, meta, rooms_per_night = row
-        flights, ground, hotel, daily, fees, total = cost
-        rooms, nights, landed, flight_minutes, enjoy, free = meta
-        outbound, inbound = self._legs(out), self._legs(ret)
+    def _option(self, row, preference, origin: str | None = None, choice_cache: dict | None = None) -> dict:
+        country, out, cities, moves, ret, days, cost, fits, reasons, meta = row
+        flights, ground, daily, fees, total = cost
+        landed, flight_minutes, enjoy, free = meta
+        outbound, inbound = self._legs(out, origin, choice_cache), self._legs(ret, origin, choice_cache)
         return {
             "country": country,
             "cities": list(cities),
@@ -215,20 +256,23 @@ class Planner:
             "inbound": inbound,
             "moves": [{"from": m[0], "to": m[1], "mode": m[2], "price": m[3], "minutes": m[4]} for m in moves],
             "days": [self._day(d) for d in days],
-            "cost": {"flights": flights, "ground": ground, "hotel": hotel, "daily": daily, "fees": fees, "total": total},
+            "cost": {"flights": flights, "ground": ground, "daily": daily, "fees": fees, "total": total},
             "fits": fits == "yes",
             "reasons": [self._reason(r, preference) for r in reasons],
             "notes": [{"kind": r[0], "text": self._reason(r, preference)} for r in reasons if r[0] in IMPORTANT],
-            "roomPrice": {c: p for c, p in rooms_per_night},
-            "meta": {"rooms": rooms, "nights": nights, "landedDay": landed,
-                     "flightMinutes": flight_minutes, "enjoy": enjoy, "free": free},
+            "meta": {"landedDay": landed, "flightMinutes": flight_minutes, "enjoy": enjoy, "free": free},
         }
 
     def _day(self, d) -> dict:
-        n, kind, city, travel, acts = d
+        n, kind, city, travel, acts, alts = d
+        pack = lambda a: {
+            "name": a[0], "category": a[1], "fee": a[2], "hours": float(a[3]),
+            "zone": a[4], "slot": a[5], "details": a[6],
+        }
         out = {
             "day": n, "kind": kind, "city": None if city == "none" else city, "travel": None,
-            "activities": [{"name": a[0], "category": a[1], "fee": a[2], "hours": float(a[3])} for a in acts],
+            "activities": [pack(a) for a in acts],
+            "alternatives": [pack(a) for a in alts],
         }
         if travel != "none":
             if travel[0] == "flights":
@@ -280,8 +324,7 @@ class Planner:
             return f"Heads up: {a[1]} in {country(a[0])}"
         if tag == "prices":
             sign = lambda pct: f"{pct - 100:+d}%"
-            return (f"{MONTHS[a[1] - 1]} in {country(a[0])}: sample flight prices {sign(a[2])}, "
-                    f"hotels {sign(a[3])} compared with a normal month")
+            return f"{MONTHS[a[1] - 1]} in {country(a[0])}: sample flight prices {sign(a[2])} compared with a normal month"
         if tag == "thai_holiday":
             return f"Thai holiday ({a[0]}): many Thais fly abroad, so flights from Thailand cost more"
         if tag == "live_fares":
@@ -300,9 +343,6 @@ class Planner:
                     else "Full-service airlines only (flights inside Thailand excepted)")
         if tag == "no_night_flights":
             return "No take-offs between 22:00 and 06:00, as you asked"
-        if tag == "hotel":
-            return ("Budget hotels: about 40% cheaper than mid-range" if a[0] == "budget"
-                    else "Luxury hotels: about 2.2 times mid-range prices")
         if tag == "your_cities":
             return "Visits only the cities you picked, in the best order"
         if tag == "gateway":
