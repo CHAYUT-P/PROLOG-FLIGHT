@@ -182,7 +182,7 @@ move_rows([], []).
 move_rows([move(F, T, M, P, Min) | Ms], [[F, T, M, P, Min] | Rs]) :- move_rows(Ms, Rs).
 
 day_rows([], []).
-day_rows([day(N, Kind, City, Travel, Acts, Alts) | Ds], [[N, Kind, City, TravelRow, ActRows, AltRows] | Rs]) :-
+day_rows([day(N, Kind, City, Travel, Acts, Alts, H, W) | Ds], [[N, Kind, City, TravelRow, ActRows, AltRows, H, W] | Rs]) :-
     travel_row(Travel, TravelRow),
     act_rows(Acts, ActRows),
     act_rows(Alts, AltRows),

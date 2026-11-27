@@ -49,6 +49,7 @@ class Planner:
         self.cities = {c["id"]: c for c in self._map["cities"]}
         self.countries = {c["id"]: c for c in self._map["countries"]}
         self.airports = {c["id"] for c in self._map["cities"] if c["zone"] is not None}
+        self._city_cats: dict[str, list[str]] = {}
 
 
     def _one(self, query: str) -> dict | None:
@@ -80,6 +81,51 @@ class Planner:
             "countries": countries, "cities": cities, "flights": flights, "ground": ground,
             "outline": json.loads(MAP_PATH.read_text()),
         }
+
+    def city_categories(self, city: str) -> list[str]:
+        if city not in self._city_cats:
+            res = self._one(f"city_cats({city}, Cats)")
+            self._city_cats[city] = [str(c) for c in res["Cats"]] if res else []
+        return self._city_cats[city]
+
+    def replan_days(self, opt: dict, interests: list[str], day_prefs: dict[int, str],
+                    people: int, budget: int) -> dict:
+        specs = []
+        for d in opt["days"]:
+            city = d["city"] if d["city"] else "none"
+            specs.append(f"[{d['day']},{d['kind']},{city},{float(d.get('hours', 0))},{d.get('window', 'full')}]")
+        specs_term = "[" + ",".join(specs) + "]"
+        prefs_term = "[" + ",".join(f"[{int(day)},{cat}]" for day, cat in sorted(day_prefs.items())) + "]"
+        ints_term = "[" + ",".join(interests) + "]"
+        q = f"reschedule_days({specs_term}, {ints_term}, {prefs_term}, OutRows)"
+        res = self._one(q)
+        if not res:
+            return opt
+        pack = lambda a: {
+            "name": a[0], "category": a[1], "fee": a[2], "hours": float(a[3]),
+            "zone": a[4], "slot": a[5], "details": a[6],
+        }
+        by_day = {int(row[0]): row for row in res["OutRows"]}
+        for d in opt["days"]:
+            row = by_day.get(d["day"])
+            if not row:
+                continue
+            _, kind, act_rows, alt_rows = row
+            d["kind"] = str(kind)
+            d["activities"] = [pack(a) for a in act_rows]
+            d["alternatives"] = [pack(a) for a in alt_rows]
+
+        fees_pp = sum(a["fee"] for d in opt["days"] for a in d["activities"])
+        opt["cost"]["fees"] = int(fees_pp) * people
+        opt["cost"]["total"] = (opt["cost"]["flights"] + opt["cost"]["ground"]
+                                + opt["cost"]["daily"] + opt["cost"]["fees"])
+        opt["fits"] = opt["cost"]["total"] <= budget
+        base_ints = set(interests or INTERESTS)
+        opt["meta"]["enjoy"] = sum(
+            1 for d in opt["days"] for a in d["activities"] if a["category"] in base_ints
+        )
+        opt["meta"]["free"] = sum(1 for d in opt["days"] if d["kind"] == "free")
+        return opt
 
     def map_data(self) -> dict:
         return self._map
@@ -153,6 +199,15 @@ class Planner:
         steps, edges, flight_options, plans, affordable = stats
         choice_cache: dict[tuple[str, str], list[dict]] = {}
         found = [self._option(r, preference, origin, choice_cache) for r in rows]
+        benchmark = None
+        if found and found[0]["outbound"]:
+            arrive = found[0]["outbound"][-1]["to"]
+            b = self._one(f"compare_all_search({origin}, {arrive}, {preference}, DF, UCS, AStar)")
+            if b:
+                benchmark = {
+                    "from": origin, "to": arrive, "pref": preference,
+                    "dfs": int(b["DF"]), "ucs": int(b["UCS"]), "astar": int(b["AStar"]),
+                }
         trip = dict(origin=origin, destination=destination, days=days, month=month, people=people,
                     budget=budget, interests=interests, pace=pace, preference=preference,
                     options=options)
@@ -165,6 +220,7 @@ class Planner:
                 "plans": plans,
                 "affordable": affordable,
             },
+            "benchmark": benchmark,
             "options": found,
             "empty_reason": self._empty_reason(trip, flight_options, plans),
         }
@@ -264,13 +320,14 @@ class Planner:
         }
 
     def _day(self, d) -> dict:
-        n, kind, city, travel, acts, alts = d
+        n, kind, city, travel, acts, alts, hours, window = d
         pack = lambda a: {
             "name": a[0], "category": a[1], "fee": a[2], "hours": float(a[3]),
             "zone": a[4], "slot": a[5], "details": a[6],
         }
         out = {
             "day": n, "kind": kind, "city": None if city == "none" else city, "travel": None,
+            "hours": float(hours), "window": str(window),
             "activities": [pack(a) for a in acts],
             "alternatives": [pack(a) for a in alts],
         }

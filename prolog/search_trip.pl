@@ -67,6 +67,9 @@ slot_order_ok(all_day, _) :- !, fail.
 slot_order_ok(S1, S2) :- slot_rank(S1, R1), slot_rank(S2, R2), R1 =< R2.
 
 schedule_day(City, Interests, Used, Hours, Window, Acts, Alts, Used1) :-
+    schedule_day(normal, City, Interests, Used, Hours, Window, Acts, Alts, Used1).
+
+schedule_day(Mode, City, Interests, Used, Hours, Window, Acts, Alts, Used1) :-
     Hours > 0,
     findall(act(Name, Cat, Fee, H, Zone, Slot, Details),
             ( attraction(City, Name, Cat, Fee, H, Zone, Slot, Details),
@@ -82,7 +85,7 @@ schedule_day(City, Interests, Used, Hours, Window, Acts, Alts, Used1) :-
               H =< Hours,
               slot_allowed(Slot, Window, Hours) ),
             Others),
-    append(Liked, Others, Pool0),
+    (Mode = strict, Liked \= [] -> Pool0 = Liked ; append(Liked, Others, Pool0)),
     take(8, Pool0, Pool),
     findall(Score - Seq,
             ( day_seq(Pool, Hours, 3, none, none, Seq, HUsed, Switches),
@@ -93,8 +96,9 @@ schedule_day(City, Interests, Used, Hours, Window, Acts, Alts, Used1) :-
     best_scored_seq(Candidates, Acts),
     act_names(Acts, Names),
     append(Used, Names, Used1),
-    pick_alternatives(Pool0, Used1, 3, Alts).
-schedule_day(City, Interests, Used, _, _, [], Alts, Used) :-
+    append(Liked, Others, AltPool),
+    pick_alternatives(AltPool, Used1, 3, Alts).
+schedule_day(_, City, Interests, Used, _, _, [], Alts, Used) :-
     findall(act(Name, Cat, Fee, H, Zone, Slot, Details),
             ( attraction(City, Name, Cat, Fee, H, Zone, Slot, Details),
               likes(Cat, Interests),
@@ -108,20 +112,26 @@ schedule_day(City, Interests, Used, _, _, [], Alts, Used) :-
     append(Liked, Others, Pool0),
     pick_alternatives(Pool0, Used, 3, Alts).
 
+zone_transit(none, _, 0) :- !.
+zone_transit(Z, Z, 0) :- !.
+zone_transit(_, _, 0.5).
+
 day_seq(_, _, 0, _, _, [], 0, 0) :- !.
 day_seq([], _, _, _, _, [], 0, 0).
 day_seq([A | As], RemH, Max, PrevZone, PrevSlot, [A | Rest], HUsed, Switches) :-
     A = act(_, _, _, H, Zone, Slot, _),
-    H =< RemH,
+    zone_transit(PrevZone, Zone, Transit),
+    Need is H + Transit,
+    Need =< RemH,
     (PrevSlot = none -> true ; slot_order_ok(PrevSlot, Slot)),
-    RemH1 is RemH - H,
+    RemH1 is RemH - Need,
     Max1 is Max - 1,
     (PrevZone = none -> Sw0 = 0 ; (PrevZone = Zone -> Sw0 = 0 ; Sw0 = 1)),
     (Slot = all_day ->
-        Rest = [], HUsed = H, Switches = Sw0
+        Rest = [], HUsed = Need, Switches = Sw0
     ;
         day_seq(As, RemH1, Max1, Zone, Slot, Rest, HRest, SwRest),
-        HUsed is H + HRest,
+        HUsed is Need + HRest,
         Switches is Sw0 + SwRest
     ).
 day_seq([_ | As], RemH, Max, PrevZone, PrevSlot, Seq, HUsed, Switches) :-
@@ -239,9 +249,10 @@ build_plan(Home, Country, Days, People, Interests, Pace, Out, Cities, Moves, Ret
     flight_days(Home, Out, Landed, FlightDays),
     city_days(Shares, Moves, Landed, ArrHours, ArrWin, Interests, [], CityDays0, Used),
     same_day_landing(Landed, Out, CityDays0, CityDayList),
-    schedule_day(Last, Interests, Used, LeaveHours, morning, LastActs, LastAlts, _),
+    schedule_day(normal, Last, Interests, Used, LeaveHours, morning, LastActs, LastAlts, UsedAll),
     append(FlightDays, CityDayList, D1),
-    append(D1, [day(Days, home, Last, flights(Ret), LastActs, LastAlts)], DayList),
+    append(D1, [day(Days, home, Last, flights(Ret), LastActs, LastAlts, LeaveHours, morning)], DayList0),
+    clean_trip_alts(DayList0, UsedAll, DayList),
     legs_price(Out, P1), legs_price(Ret, P2),
     Fl is (P1 + P2) * People,
     moves_price(Moves, MP), Gr is MP * People,
@@ -252,18 +263,24 @@ build_plan(Home, Country, Days, People, Interests, Pace, Out, Cities, Moves, Ret
     enjoyment(DayList, Interests, Enjoy),
     free_days(DayList, Free).
 
-free_days(Days, N) :- findall(x, member(day(_, free, _, _, _, _), Days), Xs), listlen(Xs, N).
+clean_trip_alts([], _, []).
+clean_trip_alts([day(N, Kind, City, Travel, Acts, Alts0, H, W) | Ds], UsedAll,
+                [day(N, Kind, City, Travel, Acts, Alts, H, W) | Rest]) :-
+    findall(A, (member(A, Alts0), A = act(Name, _, _, _, _, _, _), \+ member(Name, UsedAll)), Alts),
+    clean_trip_alts(Ds, UsedAll, Rest).
+
+free_days(Days, N) :- findall(x, member(day(_, free, _, _, _, _, _, _), Days), Xs), listlen(Xs, N).
 
 flight_days(_, _, 1, []) :- !.
-flight_days(Home, Out, Landed, [day(1, fly, Home, flights(Out), [], []) | Air]) :-
+flight_days(Home, Out, Landed, [day(1, fly, Home, flights(Out), [], [], 0, full) | Air]) :-
     in_air(2, Landed, Air).
 
-same_day_landing(1, Out, [day(1, arrive, City, none, Acts, Alts) | Ds],
-                 [day(1, arrive, City, flights(Out), Acts, Alts) | Ds]) :- !.
+same_day_landing(1, Out, [day(1, arrive, City, none, Acts, Alts, H, W) | Ds],
+                 [day(1, arrive, City, flights(Out), Acts, Alts, H, W) | Ds]) :- !.
 same_day_landing(_, _, Ds, Ds).
 
 in_air(N, Landed, []) :- N >= Landed, !.
-in_air(N, Landed, [day(N, air, none, none, [], []) | Rest]) :- N1 is N + 1, in_air(N1, Landed, Rest).
+in_air(N, Landed, [day(N, air, none, none, [], [], 0, full) | Rest]) :- N1 is N + 1, in_air(N1, Landed, Rest).
 
 city_days([], _, _, _, _, _, Used, [], Used).
 city_days([City - D | Shares], Moves, N, Hours, Win, Interests, Used0, Days, Used) :-
@@ -279,8 +296,8 @@ next_city([move(_, _, _, _, Min) | Ms], _, Ms, Hours, Win) :- !,
 next_city(Ms, _, Ms, 8, full).
 
 stay_days(_, 0, N, _, _, _, _, Used, [], N, Used) :- !.
-stay_days(City, D, N, Hours, Win, Kind, Interests, Used0, [day(N, Kind1, City, Travel, Acts, Alts) | Days], NOut, Used) :-
-    schedule_day(City, Interests, Used0, Hours, Win, Acts, Alts, Used1),
+stay_days(City, D, N, Hours, Win, Kind, Interests, Used0, [day(N, Kind1, City, Travel, Acts, Alts, Hours, Win) | Days], NOut, Used) :-
+    schedule_day(normal, City, Interests, Used0, Hours, Win, Acts, Alts, Used1),
     day_kind(Kind, Acts, Kind1, Travel),
     D1 is D - 1, N1 is N + 1,
     stay_days(City, D1, N1, 8, full, later, Interests, Used1, Days, NOut, Used).
@@ -292,10 +309,10 @@ day_kind(later, _, explore, none).
 attach_moves(Days, Moves, Out) :- attach(Days, first, Moves, Out).
 
 attach([], _, _, []).
-attach([day(N, arrive, City, T, A, Alts) | Ds], first, Ms, [day(N, arrive, City, T, A, Alts) | Rest]) :- !,
+attach([day(N, arrive, City, T, A, Alts, H, W) | Ds], first, Ms, [day(N, arrive, City, T, A, Alts, H, W) | Rest]) :- !,
     attach(Ds, later, Ms, Rest).
-attach([day(N, arrive, City, none, A, Alts) | Ds], later, [move(F, City, M, P, Min) | Ms],
-       [day(N, move, City, ground(F, City, M, P, Min), A, Alts) | Rest]) :- !,
+attach([day(N, arrive, City, none, A, Alts, H, W) | Ds], later, [move(F, City, M, P, Min) | Ms],
+       [day(N, move, City, ground(F, City, M, P, Min), A, Alts, H, W) | Rest]) :- !,
     attach(Ds, later, Ms, Rest).
 attach([D | Ds], Flag, Ms, [D | Rest]) :- attach(Ds, Flag, Ms, Rest).
 
@@ -303,13 +320,55 @@ moves_price([], 0).
 moves_price([move(_, _, _, P, _) | Ms], T) :- moves_price(Ms, T0), T is T0 + P.
 
 fees(Days, Total) :-
-    findall(F, (member(day(_, _, _, _, Acts, _), Days), member(act(_, _, F, _, _, _, _), Acts)), Fs),
+    findall(F, (member(day(_, _, _, _, Acts, _, _, _), Days), member(act(_, _, F, _, _, _, _), Acts)), Fs),
     sum(Fs, Total).
 
 sum([], 0).
 sum([X | Xs], T) :- sum(Xs, T0), T is T0 + X.
 
 enjoyment(Days, Interests, E) :-
-    findall(x, (member(day(_, _, _, _, Acts, _), Days), member(act(_, Cat, _, _, _, _, _), Acts), likes(Cat, Interests)), Xs),
+    findall(x, (member(day(_, _, _, _, Acts, _, _, _), Days), member(act(_, Cat, _, _, _, _, _), Acts), likes(Cat, Interests)), Xs),
     listlen(Xs, E).
+
+% --- Interactive re-search across base trip days when user pins per-day categories (zero duplicates)
+city_cats(City, Cats) :-
+    findall(Cat, attraction(City, _, Cat, _, _, _, _, _), Cs),
+    no_dups(Cs, Cats).
+
+reschedule_days(DaySpecs, BaseInterests, DayPrefs, OutRows) :-
+    resched_loop(DaySpecs, BaseInterests, DayPrefs, [], RawDays, UsedAll),
+    clean_resched_rows(RawDays, UsedAll, OutRows).
+
+resched_loop([], _, _, Used, [], Used).
+resched_loop([[N, Kind, none, H, W] | Ds], BaseInt, Prefs, Used0,
+             [[N, Kind, [], [], H, W] | Rest], UsedAll) :- !,
+    resched_loop(Ds, BaseInt, Prefs, Used0, Rest, UsedAll).
+resched_loop([[N, Kind, _City, H, W] | Ds], BaseInt, Prefs, Used0,
+             [[N, Kind1, Acts, Alts, H, W] | Rest], UsedAll) :-
+    (Kind = fly ; Kind = air), !,
+    Kind1 = Kind, Acts = [], Alts = [],
+    resched_loop(Ds, BaseInt, Prefs, Used0, Rest, UsedAll).
+resched_loop([[N, Kind, City, H, W] | Ds], BaseInt, Prefs, Used0,
+             [[N, Kind1, Acts, Alts, H, W] | Rest], UsedAll) :-
+    (member([N, Cat], Prefs) ->
+        Mode = strict, DayInt = [Cat]
+    ;
+        Mode = normal, DayInt = BaseInt
+    ),
+    schedule_day(Mode, City, DayInt, Used0, H, W, Acts, Alts, Used1),
+    resched_kind(Kind, Acts, Kind1),
+    resched_loop(Ds, BaseInt, Prefs, Used1, Rest, UsedAll).
+
+resched_kind(explore, [], free) :- !.
+resched_kind(free, [], free) :- !.
+resched_kind(free, _, explore) :- !.
+resched_kind(K, _, K).
+
+clean_resched_rows([], _, []).
+clean_resched_rows([[N, Kind, Acts, Alts0, _, _] | Ds], UsedAll,
+                   [[N, Kind, ActRows, AltRows] | Rest]) :-
+    findall(A, (member(A, Alts0), A = act(Name, _, _, _, _, _, _), \+ member(Name, UsedAll)), Alts),
+    act_rows(Acts, ActRows),
+    act_rows(Alts, AltRows),
+    clean_resched_rows(Ds, UsedAll, Rest).
 

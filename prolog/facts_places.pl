@@ -63,8 +63,13 @@ attraction(osaka, 'Shinsaibashi shopping',    shopping,     0, 3,   namba,      
 attraction(osaka, 'Kuromon Market',           food,       400, 2,   namba,      morning,   'Osaka''s kitchen: grilled scallops, wagyu skewers & fruit').
 attraction(osaka, 'Umeda Sky Building',       culture,    400, 1.5, umeda,      evening,   '360-degree open-air rooftop observatory above Osaka').
 attraction(osaka, 'Kaiyukan Aquarium',        adventure,  700, 3,   bay_area,   afternoon, 'Giant Pacific Ocean tank with whale sharks & penguins').
+attraction(osaka, 'Sumiyoshi Taisha Shrine',  culture,      0, 2,   south,      morning,   'Iconic vermilion drum bridge & ancient Shinto shrine').
+attraction(osaka, 'Amerikamura street fashion', shopping,   0, 2.5, namba,      afternoon, 'Indie streetwear, vintage shops & Triangle Park cafes').
+attraction(osaka, 'Nakanoshima Park and Museum', nature,   300, 2,   central,    morning,   'River-island rose gardens & Oriental Ceramics Museum').
+attraction(osaka, 'Tempozan Harbor Village',  shopping,     0, 2.5, bay_area,   afternoon, 'Waterfront shopping mall, giant Ferris wheel & bay views').
 attraction(osaka, 'Shinsekai kushikatsu',     food,       400, 2,   shinsekai,  evening,   'Retro Tsutenkaku district famous for crispy skewers').
 attraction(osaka, 'Namba nightlife',          nightlife,  500, 2,   namba,      evening,   'Hozenji Yokocho alley pubs & live music clubs').
+attraction(osaka, 'Tempozan Ferris Wheel',    adventure,  250, 1.5, bay_area,   evening,   '112m harbor ferris wheel lighting up Osaka Bay at dusk').
 
 attraction(sapporo, 'Odori Park',             nature,       0, 1.5, central,    morning,   'Tree-lined central promenade & Sapporo TV Tower').
 attraction(sapporo, 'Ramen Alley',            food,       350, 1,   susukino,   evening,   'Narrow lane of classic Hokkaido miso-butter ramen shops').

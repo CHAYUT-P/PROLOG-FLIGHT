@@ -235,20 +235,24 @@ bad_origin_hop(OriginCountry, _, Next, To) :-
 
 best_routes(From, To, Pref, K, Routes) :-
     city(From, _, _, _, OriginCountry, _, _),
-    bf([r(0, From, start, [From], [])], OriginCountry, To, Pref, K, Routes).
+    bf(astar, [r(0, From, start, [From], [])], OriginCountry, To, Pref, K, Routes).
 
-bf(_, _, _, _, 0, []) :- !.
-bf([], _, _, _, _, []) :- !.
-bf(Queue, OriginCountry, To, Pref, K, Routes) :-
+best_routes_ucs(From, To, Pref, K, Routes) :-
+    city(From, _, _, _, OriginCountry, _, _),
+    bf(ucs, [r(0, From, start, [From], [])], OriginCountry, To, Pref, K, Routes).
+
+bf(_, _, _, _, _, 0, []) :- !.
+bf(_, [], _, _, _, _, []) :- !.
+bf(Mode, Queue, OriginCountry, To, Pref, K, Routes) :-
     shortest(Queue, Best, Rest),
-    visit(Best, Rest, OriginCountry, To, Pref, K, Routes).
+    visit(Mode, Best, Rest, OriginCountry, To, Pref, K, Routes).
 
-visit(r(_, To, _, _, Legs), Rest, OriginCountry, To, Pref, K, [Route | More]) :-
+visit(Mode, r(_, To, _, _, Legs), Rest, OriginCountry, To, Pref, K, [Route | More]) :-
     \+ Legs = [], !,
     rev(Legs, Route),
     K1 is K - 1,
-    bf(Rest, OriginCountry, To, Pref, K1, More).
-visit(r(_, Here, Clock, Seen, Legs), Rest, OriginCountry, To, Pref, K, Routes) :-
+    bf(Mode, Rest, OriginCountry, To, Pref, K1, More).
+visit(Mode, r(_, Here, Clock, Seen, Legs), Rest, OriginCountry, To, Pref, K, Routes) :-
     opt(max_flights, Max),
     listlen(Legs, N), N < Max, !,
     findall(r(C, Next, landed(Arr), [Next | Seen], [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs]),
@@ -261,12 +265,16 @@ visit(r(_, Here, Clock, Seen, Legs), Rest, OriginCountry, To, Pref, K, Routes) :
               departure(Clock, Here, HHMM, Dep, Wait),
               Arr is Dep + Minutes,
               note_explored(Here, Next),
-              astar_cost(Pref, Next, To, [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs], C) ),
+              (Mode = astar ->
+                  astar_cost(Pref, Next, To, [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs], C)
+              ;
+                  path_cost(Pref, [leg(Code, Here, Next, Dep, Arr, Price, Wait) | Legs], C)
+              ) ),
             Longer),
     append(Longer, Rest, Queue),
-    bf(Queue, OriginCountry, To, Pref, K, Routes).
-visit(_, Rest, OriginCountry, To, Pref, K, Routes) :-
-    bf(Rest, OriginCountry, To, Pref, K, Routes).
+    bf(Mode, Queue, OriginCountry, To, Pref, K, Routes).
+visit(Mode, _, Rest, OriginCountry, To, Pref, K, Routes) :-
+    bf(Mode, Rest, OriginCountry, To, Pref, K, Routes).
 
 % --- Memoization (Top 4 flight cache)
 best_flights(From, To, Pref, Best) :- flight_memo(From, To, Pref, Best), !.
@@ -275,13 +283,19 @@ best_flights(From, To, Pref, Best) :-
     assertz(flight_memo(From, To, Pref, Best)).
 
 compare_search(From, To, Pref, DF, BF) :-
+    compare_all_search(From, To, Pref, DF, _, BF).
+
+compare_all_search(From, To, Pref, DF, UCS, AStar) :-
     reset_search,
     findall(K - L, (fly(From, To, L), \+ L = [], flight_key(Pref, L, K)), Pairs),
     insort(Pairs, _),
     steps(DF),
     reset_search,
-    best_routes(From, To, Pref, 2, _),
-    steps(BF).
+    best_routes_ucs(From, To, Pref, 4, _),
+    steps(UCS),
+    reset_search,
+    best_routes(From, To, Pref, 4, _),
+    steps(AStar).
 
 clear_live :- retract(live_fare(_, _, _)), fail.
 clear_live :- retract(live_departure(_, _)), fail.

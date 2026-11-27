@@ -100,7 +100,7 @@ class TangWindow(QMainWindow):
         results_page = QWidget()
         body = hbox(0)
         results_page.setLayout(body)
-        self.results = ResultsPanel(self.cities, self.countries)
+        self.results = ResultsPanel(self.cities, self.countries, self.replan_day, self.planner.city_categories)
         body.addWidget(self._plan_column(), 1)
         self.map_column = self._map_column()
         body.addWidget(self.map_column)
@@ -476,6 +476,19 @@ class TangWindow(QMainWindow):
     def pick_plan(self, index: int) -> None:
         if self.phase != "searching":
             self.travel(index)
+
+    def replan_day(self, opt: dict, day_num: int, cat: str | None) -> None:
+        if self.phase == "searching" or not self.searched:
+            return
+        prefs = dict(opt.get("dayPrefs", {}))
+        if cat:
+            prefs[day_num] = cat
+        else:
+            prefs.pop(day_num, None)
+        opt["dayPrefs"] = prefs
+        self.planner.replan_days(opt, self.searched["interests"], prefs,
+                                 self.searched["people"], self.searched["budget"])
+        self.results.show_plan(self.result, self.selected, True, self.searched, self.pick_plan, self.offers)
 
     def travel(self, index: int) -> None:
         self.selected = index

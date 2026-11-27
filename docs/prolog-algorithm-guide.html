@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tang (ทาง) — Prolog Algorithm &amp; Architecture Visual Guide</title>
+<style>
+  :root {
+    --bg: #f4f7f5;
+    --paper: #ffffff;
+    --ink: #16241f;
+    --ink2: #4a5b54;
+    --ink3: #768880;
+    --rule: #d8e2dc;
+    --mint: #e8f3ee;
+    --air: #7b3fa0;
+    --air-bg: #f6effa;
+    --train: #2166ac;
+    --train-bg: #eef5fc;
+    --marigold: #d97706;
+    --marigold-bg: #fef5e7;
+    --ok: #157f4b;
+    --ok-bg: #eaf7f0;
+    --danger: #c0392b;
+    --danger-bg: #fdeeed;
+    --code-bg: #151e1b;
+    --code-ink: #e7efeb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--rule);
+    padding: 12px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .brand h1 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+  }
+  .brand span {
+    color: var(--ink2);
+    font-size: 0.9rem;
+  }
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  nav a {
+    text-decoration: none;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  nav a:hover {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  main {
+    max-width: 1200px;
+    margin: 24px auto 64px;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  section.card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 24px 26px;
+    box-shadow: 0 2px 10px rgba(22, 36, 31, 0.04);
+  }
+  .sec-tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--mint);
+    color: var(--ok);
+    margin-bottom: 8px;
+  }
+  h2 {
+    margin: 0 0 8px;
+    font-size: 1.45rem;
+  }
+  h3 {
+    margin: 18px 0 8px;
+    font-size: 1.05rem;
+    color: var(--ink);
+  }
+  p.lead {
+    margin: 0 0 18px;
+    color: var(--ink2);
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 920px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  .svg-box {
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    background: #fcfefd;
+    padding: 14px;
+    overflow-x: auto;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    font-family: "IBM Plex Sans Thai", -apple-system, sans-serif;
+  }
+  .say-box {
+    background: var(--marigold-bg);
+    border-left: 4px solid var(--marigold);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 14px 0;
+  }
+  .say-box strong {
+    color: #92400e;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .code-wrap {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #26352f;
+  }
+  .code-head {
+    background: #1d2a25;
+    padding: 8px 14px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    color: #a9bdb4;
+    display: flex;
+    justify-content: space-between;
+  }
+  pre {
+    margin: 0;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+  code.il {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: #edf2ef;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    color: #103b29;
+  }
+  ul.notes {
+    margin: 10px 0 0;
+    padding-left: 20px;
+  }
+  ul.notes li {
+    margin-bottom: 8px;
+  }
+  .step-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 12px;
+  }
+  .step-btn {
+    cursor: pointer;
+    border: 1px solid var(--rule);
+    background: var(--bg);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    font-family: inherit;
+  }
+  .step-btn.active {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  .trace-panel {
+    border: 1px solid var(--rule);
+    background: #f9fbfa;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .queue-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .pill {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 0.82rem;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--rule);
+    background: #fff;
+  }
+  .pill.pop {
+    background: var(--marigold-bg);
+    border-color: var(--marigold);
+    font-weight: 700;
+  }
+  .pill.win {
+    background: var(--ok-bg);
+    border-color: var(--ok);
+    color: var(--ok);
+    font-weight: 700;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 0.9rem;
+  }
+  th, td {
+    border: 1px solid var(--rule);
+    padding: 8px 10px;
+    text-align: center;
+  }
+  th {
+    background: var(--bg);
+    font-weight: 700;
+  }
+  td:first-child, th:first-child { text-align: left; }
+  .win-pct {
+    color: var(--ok);
+    font-weight: 700;
+  }
+  .qa-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .qa-card {
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: #fcfefd;
+  }
+  .qa-card h4 {
+    margin: 0 0 6px;
+    color: var(--danger);
+    font-size: 0.95rem;
+  }
+  .qa-card p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--ink2);
+  }
+  .kw { color: #82d9a8; font-weight: 600; }
+  .fn { color: #f6c473; }
+  .cm { color: #7f978d; font-style: italic; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>ทาง Tang — คู่มือวาดรูป + อธิบาย Algorithm &amp; Code Prolog</h1>
+    <span>สำหรับขึ้นพรีเซนต์และวาดบนกระดาน</span>
+  </div>
+  <nav>
+    <a href="#layer">1. Front ↔ Back ↔ Prolog</a>
+    <a href="#pipeline">2. ภาพรวม plan_trip/11</a>
+    <a href="#tree">3. Search Tree + Backtrack</a>
+    <a href="#bfs">4. Best-First Search (คลิกดู Step)</a>
+    <a href="#qa">5. กันโดนอาจารย์บ่น / Q&amp;A</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- SECTION 1: 3-LAYER ARCHITECTURE -->
+<section class="card" id="layer">
+  <span class="sec-tag">รูปที่ 1 · วาดเวลาอธิบาย Frontend ↔ Backend ↔ Prolog</span>
+  <h2>3 ชั้นทำงานร่วมกันยังไง (Frontend → Backend/API → Prolog)</h2>
+  <p class="lead">
+    ประเด็นสำคัญที่ต้องย้ำให้อาจารย์มั่นใจ: <strong>Python ไม่ได้คิดแผนทริปเลยแม้แต่นิดเดียว</strong> —
+    Python แค่รับค่าจากหน้าจอ, ไปดึงราคาตั๋ว (optional), ส่ง query เข้า <code>pyswip</code> แล้วเอาคำตอบจาก Prolog มาวาด
+  </p>
+
+  <div class="svg-box">
+    <svg viewBox="0 0 1060 290" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="#16241f"/>
+        </marker>
+        <marker id="arr-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="#d97706"/>
+        </marker>
+        <marker id="arr-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="#157f4b"/>
+        </marker>
+      </defs>
+
+      <!-- Layer 1: Frontend -->
+      <rect x="20" y="25" width="235" height="235" rx="12" fill="#eef5fc" stroke="#2166ac" stroke-width="2"/>
+      <text x="137" y="52" text-anchor="middle" font-weight="800" font-size="15" fill="#2166ac">1. Frontend (PySide6)</text>
+      <text x="137" y="72" text-anchor="middle" font-size="12" fill="#4a5b54">app.py + ui/*</text>
+      <rect x="36" y="88" width="203" height="58" rx="8" fill="#fff" stroke="#b9d2ea"/>
+      <text x="137" y="108" text-anchor="middle" font-weight="700" font-size="12.5" fill="#16241f">รับค่าฟอร์ม (self.form)</text>
+      <text x="137" y="126" text-anchor="middle" font-size="11" fill="#4a5b54">BKK/DMK/CNX/HKT, วัน, งบ, ฟิลเตอร์</text>
+      <rect x="36" y="160" width="203" height="84" rx="8" fill="#fff" stroke="#b9d2ea"/>
+      <text x="137" y="182" text-anchor="middle" font-weight="700" font-size="12.5" fill="#16241f">แสดงผล (View Only)</text>
+      <text x="137" y="200" text-anchor="middle" font-size="11" fill="#4a5b54">• MapView.replay() เส้นสีส้ม</text>
+      <text x="137" y="216" text-anchor="middle" font-size="11" fill="#4a5b54">• ResultsPanel ตั๋ว + ตารางวัน</text>
+      <text x="137" y="232" text-anchor="middle" font-size="11" fill="#4a5b54">• booking.py ลิงก์ View flight</text>
+
+      <!-- Layer 2: Backend -->
+      <rect x="345" y="25" width="320" height="235" rx="12" fill="#fef5e7" stroke="#d97706" stroke-width="2"/>
+      <text x="505" y="52" text-anchor="middle" font-weight="800" font-size="15" fill="#b45309">2. Backend Bridge &amp; API</text>
+      <text x="505" y="72" text-anchor="middle" font-size="12" fill="#4a5b54">backend/planner.py + live_prices.py</text>
+
+      <rect x="362" y="88" width="286" height="68" rx="8" fill="#fff" stroke="#f3d299"/>
+      <text x="505" y="108" text-anchor="middle" font-weight="700" font-size="12.5" fill="#16241f">live_prices.fares_for() [Thread แยก]</text>
+      <text x="505" y="125" text-anchor="middle" font-size="11" fill="#4a5b54">ดึง Aviasales API (หรือ cache/fares.json)</text>
+      <text x="505" y="141" text-anchor="middle" font-size="11" fill="#4a5b54">เก็บราคา + เวลาบิน + link ไฟล์ทตรง</text>
+
+      <rect x="362" y="168" width="286" height="76" rx="8" fill="#fff" stroke="#f3d299"/>
+      <text x="505" y="188" text-anchor="middle" font-weight="700" font-size="12.5" fill="#16241f">Planner (pyswip bridge)</text>
+      <text x="505" y="205" text-anchor="middle" font-size="11" fill="#4a5b54">1) เช็ค Whitelist + แปลง option_terms()</text>
+      <text x="505" y="221" text-anchor="middle" font-size="11" fill="#4a5b54">2) assertz(live_fare/3) เข้า Prolog</text>
+      <text x="505" y="237" text-anchor="middle" font-size="11" fill="#4a5b54">3) แปลง Result กลับเป็น dict + ประโยค</text>
+
+      <!-- Layer 3: Prolog -->
+      <rect x="760" y="25" width="280" height="235" rx="12" fill="#eaf7f0" stroke="#157f4b" stroke-width="2"/>
+      <text x="900" y="52" text-anchor="middle" font-weight="800" font-size="15" fill="#157f4b">3. Prolog Brain (SWI-Prolog)</text>
+      <text x="900" y="72" text-anchor="middle" font-size="12" fill="#4a5b54">prolog/trip.pl (1,087 บรรทัด)</text>
+      <rect x="778" y="88" width="244" height="156" rx="8" fill="#fff" stroke="#a6dec0"/>
+      <text x="900" y="110" text-anchor="middle" font-weight="700" font-size="12.5" fill="#16241f">คำนวณและตัดสินใจ 100%</text>
+      <text x="790" y="132" font-size="11.5" fill="#16241f">• map_data/4 ส่งพิกัดให้หน้าแรก</text>
+      <text x="790" y="152" font-size="11.5" fill="#16241f">• Best-First Search หาไฟล์ท</text>
+      <text x="790" y="172" font-size="11.5" fill="#16241f">• DFS ทัวร์เมือง + Backtrack</text>
+      <text x="790" y="192" font-size="11.5" fill="#16241f">• แบ่งวัน จัดที่เที่ยว คิดเงินทั้งหมด</text>
+      <text x="790" y="212" font-size="11.5" fill="#16241f">• ให้คะแนน เรียงลำดับ + เหตุผล</text>
+      <text x="790" y="232" font-size="11.5" fill="#157f4b" font-weight="700">• คืน [Stats, Top 3 Plans]</text>
+
+      <!-- Arrows -->
+      <path d="M255,118 L342,118" stroke="#16241f" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+      <text x="298" y="110" text-anchor="middle" font-size="11" font-weight="700">1. search()</text>
+
+      <path d="M665,130 L757,130" stroke="#d97706" stroke-width="2" fill="none" marker-end="url(#arr-m)"/>
+      <text x="711" y="112" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b45309">2. assertz</text>
+      <text x="711" y="124" text-anchor="middle" font-size="10.5" fill="#b45309">live_fare/3</text>
+
+      <path d="M665,188 L757,188" stroke="#16241f" stroke-width="2.2" fill="none" marker-end="url(#arr)"/>
+      <text x="711" y="178" text-anchor="middle" font-size="10.5" font-weight="700">3. plan_trip/11</text>
+
+      <path d="M760,224 L668,224" stroke="#157f4b" stroke-width="2.2" fill="none" marker-end="url(#arr-g)"/>
+      <text x="713" y="242" text-anchor="middle" font-size="10.5" font-weight="700" fill="#157f4b">4. Result</text>
+
+      <path d="M345,214 L258,214" stroke="#157f4b" stroke-width="2.2" fill="none" marker-end="url(#arr-g)"/>
+      <text x="301" y="232" text-anchor="middle" font-size="10.5" font-weight="700" fill="#157f4b">5. dict + trace</text>
+    </svg>
+  </div>
+
+  <div class="say-box">
+    <strong>พูดตอนชี้รูปที่ 1:</strong>
+    "ตอนเปิดแอป Python เรียก <code class="il">pyswip</code> โหลด <code class="il">prolog/trip.pl</code> แล้วถาม <code class="il">map_data/4</code> เอาข้อมูลแผนที่มาจาก Prolog ก่อนเลย
+    พอกด <strong>Find trips</strong> Frontend จะให้ <code class="il">live_prices.py</code> ไปเช็คราคาจริงจาก Aviasales บน Thread แยก (ถ้าไม่มีเน็ตก็ข้าม)
+    แล้ว <code class="il">planner.py</code> จะฉีดราคาเข้า Prolog ด้วย <code class="il">assertz(live_fare/3)</code> ก่อนยิง query <code class="il">plan_trip/11</code> เข้า Prolog ไปคำนวณทั้งหมด แล้วเอาผลลัพธ์กลับมาวาดเส้นค้นหาบนแผนที่และตารางรายวันครับ"
+  </div>
+
+  <div class="grid-2">
+    <div class="code-wrap">
+      <div class="code-head"><span>app.py (L407–441) — Frontend เรียก Backend</span><span>Python</span></div>
+<pre><span class="kw">if</span> live_prices.token() <span class="kw">or</span> live_prices.CACHE.exists():
+    <span class="cm"># ยิง API ใน Thread แยก ไม่ให้หน้าจอค้าง</span>
+    job = self.pool.submit(live_prices.fares_for, outbound, inbound, ...)
+    <span class="cm"># พอเสร็จ: ฉีดราคาจริงเข้า Prolog</span>
+    self.planner.<span class="fn">set_live_fares</span>(got[<span class="str">"fares"</span>], self.offers)
+self.<span class="fn">_run_prolog</span>()
+
+<span class="kw">def</span> <span class="fn">_run_prolog</span>(self):
+    self.result = self.planner.<span class="fn">plan</span>(
+        f[<span class="str">"from"</span>], f[<span class="str">"to"</span>], f[<span class="str">"days"</span>], f[<span class="str">"month"</span>],
+        f[<span class="str">"people"</span>], f[<span class="str">"budget"</span>], f[<span class="str">"interests"</span>],
+        f[<span class="str">"pace"</span>], f[<span class="str">"pref"</span>], self.options(f)
+    )</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-head"><span>backend/planner.py (L99–136) — pyswip คุยกับ Prolog</span><span>Python</span></div>
+<pre><span class="kw">def</span> <span class="fn">set_live_fares</span>(self, fares, offers):
+    list(self.prolog.query(<span class="str">"clear_live"</span>))
+    <span class="kw">for</span> (a, b), price <span class="kw">in</span> fares.items():
+        self.prolog.<span class="fn">assertz</span>(f<span class="str">"live_fare({a}, {b}, {int(price)})"</span>)
+
+<span class="kw">def</span> <span class="fn">plan</span>(self, origin, destination, days, ...):
+    <span class="cm"># เช็ค Whitelist กันส่งค่ามั่วเข้า Prolog</span>
+    opts = self.<span class="fn">option_terms</span>(options <span class="kw">or</span> {}, destination)
+    query = (
+        f<span class="str">"plan_trip({origin}, {destination}, {days}, {month}, "</span>
+        f<span class="str">"{people}, {budget}, [{','.join(interests)}], {pace}, "</span>
+        f<span class="str">"{preference}, [{','.join(opts)}], Result)"</span>
+    )
+    res = self.<span class="fn">_one</span>(query)  <span class="cm"># pyswip ยิงถาม SWI-Prolog</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 2: PLAN_TRIP PIPELINE -->
+<section class="card" id="pipeline">
+  <span class="sec-tag">รูปที่ 2 · วาดเวลาอาจารย์ถาม "ข้างใน Prolog ทำงานเป็นขั้นยังไง?"</span>
+  <h2>Flow ของ <code class="il">plan_trip/11</code> จากบนลงล่าง</h2>
+  <p class="lead">
+    ถ้าอาจารย์ให้วาด Flowchart การทำงานของโปรแกรม Prolog ให้วาด <strong>5 กล่องเรียงลงมา</strong> ตามลำดับจริงของ <code class="il">plan_trip/11</code> เลยครับ
+  </p>
+
+  <div class="grid-2">
+    <div class="svg-box">
+      <svg viewBox="0 0 540 535" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="#16241f"/>
+          </marker>
+        </defs>
+
+        <!-- Step 1 -->
+        <rect x="45" y="14" width="450" height="66" rx="10" fill="#eef5fc" stroke="#2166ac" stroke-width="1.8"/>
+        <text x="270" y="36" text-anchor="middle" font-weight="800" font-size="13.5" fill="#2166ac">1. เตรียม State &amp; Options</text>
+        <text x="270" y="55" text-anchor="middle" font-size="11.5" fill="#16241f">reset_search (ล้าง explored/steps/memo) • set_month(Month)</text>
+        <text x="270" y="71" text-anchor="middle" font-size="11.5" fill="#4a5b54">set_options: ใช้ =.. (univ) แตก [hotel(luxury)] → option(hotel, luxury)</text>
+
+        <line x1="270" y1="80" x2="270" y2="104" stroke="#16241f" stroke-width="2" marker-end="url(#arr2)"/>
+
+        <!-- Step 2 -->
+        <rect x="45" y="106" width="450" height="106" rx="10" fill="#fef5e7" stroke="#d97706" stroke-width="2"/>
+        <text x="270" y="128" text-anchor="middle" font-weight="800" font-size="13.5" fill="#b45309">2. findall(P, candidate(...), Plans)  [Generate &amp; Test]</text>
+        <text x="65" y="150" font-size="11.5" fill="#16241f">① best_flights (ขาไป): Best-First Search + จำใน flight_memo/4</text>
+        <text x="65" y="168" font-size="11.5" fill="#16241f">② round_tour/4 (เที่ยวในประเทศ): DFS 1–4 เมือง + chosen_ok/2</text>
+        <text x="65" y="186" font-size="11.5" fill="#16241f">③ best_flights (ขากลับ): home_airport/2 (ยอมกลับ BKK/DMK คู่แฝดได้)</text>
+        <text x="65" y="204" font-size="11.5" fill="#16241f">④ build_plan/11: แบ่งวัน (share_days) + จัดที่เที่ยว (pick) + คิดเงิน</text>
+
+        <line x1="270" y1="212" x2="270" y2="238" stroke="#16241f" stroke-width="2" marker-end="url(#arr2)"/>
+
+        <!-- Step 3 -->
+        <rect x="45" y="240" width="450" height="62" rx="10" fill="#f6effa" stroke="#7b3fa0" stroke-width="1.8"/>
+        <text x="270" y="262" text-anchor="middle" font-weight="800" font-size="13.5" fill="#7b3fa0">3. affordable/3 &amp; pool/3 (กรองงบประมาณ)</text>
+        <text x="270" y="281" text-anchor="middle" font-size="11.5" fill="#16241f">เก็บแผนที่ Total ≤ Budget ก่อน</text>
+        <text x="270" y="296" text-anchor="middle" font-size="11" fill="#4a5b54">(ถ้าไม่มีแผนไหนเข้าเกณฑ์งบเลย ใช้แผนทั้งหมดมาเรียง แล้วติดป้าย over_budget)</text>
+
+        <line x1="270" y1="302" x2="270" y2="328" stroke="#16241f" stroke-width="2" marker-end="url(#arr2)"/>
+
+        <!-- Step 4 -->
+        <rect x="45" y="330" width="450" height="92" rx="10" fill="#eaf7f0" stroke="#157f4b" stroke-width="1.8"/>
+        <text x="270" y="352" text-anchor="middle" font-weight="800" font-size="13.5" fill="#157f4b">4. choose/5: ให้คะแนน + เรียง + คัด Top 3</text>
+        <text x="65" y="374" font-size="11.5" fill="#16241f">• score/3: คำนวณคะแนนความคุ้ม + บวกโทษวันว่าง (Free × Total // Days)</text>
+        <text x="65" y="392" font-size="11.5" fill="#16241f">• insort/2: Insertion Sort จากค่าน้อยสุด → มากสุด</text>
+        <text x="65" y="410" font-size="11.5" fill="#16241f">• different/3: คัด Top 3 ที่เมืองไม่ซ้ำ (หรือ Anywhere: best_per_country)</text>
+
+        <line x1="270" y1="422" x2="270" y2="448" stroke="#16241f" stroke-width="2" marker-end="url(#arr2)"/>
+
+        <!-- Step 5 -->
+        <rect x="45" y="450" width="450" height="68" rx="10" fill="#16241f"/>
+        <text x="270" y="473" text-anchor="middle" font-weight="800" font-size="13.5" fill="#f6c473">5. reasons/11 + Stats ──► คืน [Stats, Rows]</text>
+        <text x="270" y="492" text-anchor="middle" font-size="11.5" fill="#e7efeb">สร้างเหตุผล (under_budget, on_board, other_airport, visa_ok...)</text>
+        <text x="270" y="508" text-anchor="middle" font-size="11" fill="#a9bdb4">พร้อม steps และ explored(A,B) ทั้งหมดให้ Python วาด replay</text>
+      </svg>
+    </div>
+
+    <div>
+      <div class="code-wrap">
+        <div class="code-head"><span>prolog/trip.pl (L1002–1030) — หัวใจหลักของโปรแกรม</span><span>Prolog</span></div>
+<pre><span class="fn">plan_trip</span>(Home, Dest, Days, Month, People, Budget,
+          Interests0, Pace, Pref, Options, [Stats, Rows]) :-
+    normalize_interests(Interests0, Interests),
+    reset_search,
+    set_month(Month),
+    set_options(Options),
+    countries_for(Dest, Countries),
+    <span class="cm">% กวาดหาแผนที่เป็นไปได้ทั้งหมดด้วยการ backtrack</span>
+    <span class="kw">findall</span>(P, (member(C, Countries),
+                <span class="fn">candidate</span>(Home, C, Days, People, Interests, Pace, Pref, P)), Plans),
+    listlen(Plans, NPlans),
+    affordable(Budget, Plans, Cheap),
+    listlen(Cheap, NCheap),
+    pool(Cheap, Plans, Pool),
+    <span class="fn">choose</span>(Dest, Pref, Countries, Pool, Chosen),
+    rows(Chosen, 1, Dest, Pref, NPlans, Budget, Days, Month, People, Interests, Rows),
+    steps(Steps),
+    <span class="kw">findall</span>([A, B], explored(A, B), Edges),
+    ...,
+    Stats = [Steps, Edges, NFlights, NPlans, NCheap].
+
+<span class="fn">score</span>(Pref, P, K) :-
+    plan_key(Pref, P, K0),
+    P = plan(_, _, _, _, _, Days, costs(_, _, _, _, _, T), meta(_, _, _, _, _, Free)),
+    listlen(Days, N),
+    K <span class="kw">is</span> K0 + Free * T // N.  <span class="cm">% โทษวันว่าง: ยิ่งมีวันว่าง ยิ่งคะแนนแย่</span></pre>
+      </div>
+
+      <ul class="notes">
+        <li><strong>ทำไมใช้ <code class="il">=..</code> (univ) ใน <code class="il">set_options</code>?</strong> Python ส่งตัวเลือกเป็น list เช่น <code class="il">[hotel(luxury)]</code>; Prolog แตกมันด้วย <code class="il">O =.. [Name, Value]</code> แล้ว <code class="il">assertz(option(Name, Value))</code> ทำให้ rule อื่นถาม <code class="il">opt(hotel, L)</code> ได้เลยโดยไม่ต้องส่ง argument ยาวๆ</li>
+        <li><strong>ทำไม <code class="il">pool([], Plans, Plans) :- !.</code>?</strong> ถ้าไม่มีแผนไหนอยู่ในงบเลย (<code class="il">Cheap = []</code>) แทนที่จะ error หน้าว่าง Prolog ยอมคืนแผนที่ใกล้เคียงที่สุดแทน แล้วติด tag <code class="il">over_budget</code> บอกว่าเกินงบเท่าไหร่</li>
+        <li><strong>โหมด Anywhere คิดยังไง?</strong> <code class="il">best_per_country/4</code> เอาแผนที่ดีที่สุดของแต่ละประเทศมาคิดค่า <code class="il">TotalCost - Enjoy * 3000</code> (ถือว่ากิจกรรมที่ชอบ 1 อย่างคุ้มค่า ฿3,000)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 3: SEARCH TREE + BACKTRACKING -->
+<section class="card" id="tree">
+  <span class="sec-tag">รูปที่ 3 · วาดเวลาอาจารย์ถาม "Prolog ลองผิดลองถูก / Backtrack ยังไง?"</span>
+  <h2>Search Tree ของ <code class="il">candidate/8</code> (Generate-and-Test)</h2>
+  <p class="lead">
+    Prolog ไม่ได้สร้างทริปจนจบทุกอันแล้วค่อยลบทิ้ง — มัน <strong>สร้างทีละชิ้นแล้วเทสทันที</strong> ถ้าไม่ผ่าน (เช่น ปลายทางไม่มีสนามบิน หรือวันขั้นต่ำไม่พอ) มันจะ <strong>Fail แล้ว Backtrack กลับไปลองกิ่งอื่นทันที</strong>
+  </p>
+
+  <div class="svg-box">
+    <svg viewBox="0 0 1040 375" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,1 L9,5 L0,9 z" fill="#16241f"/>
+        </marker>
+        <marker id="arr-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,1 L9,5 L0,9 z" fill="#c0392b"/>
+        </marker>
+      </defs>
+
+      <!-- Root -->
+      <rect x="350" y="14" width="340" height="44" rx="10" fill="#16241f"/>
+      <text x="520" y="34" text-anchor="middle" font-weight="800" font-size="13.5" fill="#fff">candidate(bangkok, japan, 7 วัน, ...)</text>
+      <text x="520" y="50" text-anchor="middle" font-size="11" fill="#f6c473">ถูกเรียกวนซ้ำโดย findall/3</text>
+
+      <!-- Branches to Arrive -->
+      <path d="M440,58 L250,94" stroke="#16241f" stroke-width="1.8" marker-end="url(#arr3)"/>
+      <path d="M600,58 L780,94" stroke="#16241f" stroke-width="1.8" marker-end="url(#arr3)"/>
+
+      <!-- Arrive Tokyo -->
+      <rect x="130" y="96" width="240" height="40" rx="8" fill="#eef5fc" stroke="#2166ac" stroke-width="1.6"/>
+      <text x="250" y="114" text-anchor="middle" font-weight="700" font-size="12.5" fill="#2166ac">1. Arrive = tokyo (มีสนามบิน)</text>
+      <text x="250" y="129" text-anchor="middle" font-size="10.5" fill="#4a5b54">best_flights (BFS) → หาไฟล์ทขาไป</text>
+
+      <!-- Arrive Osaka -->
+      <rect x="660" y="96" width="240" height="40" rx="8" fill="#eef5fc" stroke="#2166ac" stroke-width="1.6"/>
+      <text x="780" y="114" text-anchor="middle" font-weight="700" font-size="12.5" fill="#2166ac">1. Arrive = osaka (มีสนามบิน)</text>
+      <text x="780" y="129" text-anchor="middle" font-size="10.5" fill="#4a5b54">best_flights (BFS) → หาไฟล์ทขาไป</text>
+
+      <!-- Tours under Tokyo -->
+      <path d="M200,136 L120,174" stroke="#16241f" stroke-width="1.6" marker-end="url(#arr3)"/>
+      <path d="M300,136 L390,174" stroke="#16241f" stroke-width="1.6" marker-end="url(#arr3)"/>
+
+      <rect x="20" y="176" width="200" height="44" rx="8" fill="#fef5e7" stroke="#d97706"/>
+      <text x="120" y="195" text-anchor="middle" font-weight="700" font-size="12">2. round_tour (DFS)</text>
+      <text x="120" y="211" text-anchor="middle" font-size="11" fill="#4a5b54">[tokyo, kyoto]</text>
+
+      <rect x="285" y="176" width="220" height="44" rx="8" fill="#fef5e7" stroke="#d97706"/>
+      <text x="395" y="195" text-anchor="middle" font-weight="700" font-size="12">2. round_tour (DFS)</text>
+      <text x="395" y="211" text-anchor="middle" font-size="11" fill="#4a5b54">[tokyo, kyoto, osaka]</text>
+
+      <!-- Tour under Osaka -->
+      <path d="M780,136 L780,174" stroke="#16241f" stroke-width="1.6" marker-end="url(#arr3)"/>
+      <rect x="660" y="176" width="240" height="44" rx="8" fill="#fef5e7" stroke="#d97706"/>
+      <text x="780" y="195" text-anchor="middle" font-weight="700" font-size="12">2. round_tour (DFS วนกลับได้)</text>
+      <text x="780" y="211" text-anchor="middle" font-size="11" fill="#4a5b54">[osaka, kyoto, osaka]</text>
+
+      <!-- Fail 1: Kyoto has no airport -->
+      <path d="M120,220 L120,254" stroke="#c0392b" stroke-width="1.6" marker-end="url(#arr-r)"/>
+      <rect x="20" y="256" width="200" height="50" rx="8" fill="#fdeeed" stroke="#c0392b" stroke-width="1.6"/>
+      <text x="120" y="276" text-anchor="middle" font-weight="800" font-size="12" fill="#c0392b">✘ FAIL: airport(kyoto)</text>
+      <text x="120" y="294" text-anchor="middle" font-size="10.5" fill="#922b21">Kyoto ไม่มีสนามบินบินกลับ → ตัดทิ้ง!</text>
+      <path d="M220,276 Q255,250 282,205" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="4 3" fill="none" marker-end="url(#arr-r)"/>
+      <text x="260" y="260" font-size="10.5" font-weight="700" fill="#c0392b">Backtrack!</text>
+
+      <!-- Check days under [tokyo, kyoto, osaka] -->
+      <path d="M395,220 L395,254" stroke="#16241f" stroke-width="1.6" marker-end="url(#arr3)"/>
+      <rect x="275" y="256" width="245" height="50" rx="8" fill="#eaf7f0" stroke="#157f4b" stroke-width="1.6"/>
+      <text x="397" y="275" text-anchor="middle" font-weight="700" font-size="12" fill="#157f4b">3. ผ่านหมด! (osaka มีสนามบิน)</text>
+      <text x="397" y="293" text-anchor="middle" font-size="10.5" fill="#16241f">share_days: 3+2+2=7 วัน (ถ้าไป 5 วัน → FAIL!)</text>
+
+      <!-- Success output -->
+      <path d="M397,306 L397,330" stroke="#157f4b" stroke-width="1.8" marker-end="url(#arr3)"/>
+      <rect x="285" y="332" width="225" height="32" rx="8" fill="#157f4b"/>
+      <text x="397" y="352" text-anchor="middle" font-weight="700" font-size="12" fill="#fff">✅ เก็บเข้า Plans แล้ว Backtrack หาต่อ</text>
+
+      <!-- Success under Osaka -->
+      <path d="M780,220 L780,254" stroke="#16241f" stroke-width="1.6" marker-end="url(#arr3)"/>
+      <rect x="650" y="256" width="265" height="50" rx="8" fill="#eaf7f0" stroke="#157f4b" stroke-width="1.6"/>
+      <text x="782" y="275" text-anchor="middle" font-weight="700" font-size="12" fill="#157f4b">3. chosen_ok([kyoto]) อนุญาต Osaka</text>
+      <text x="782" y="293" text-anchor="middle" font-size="10.5" fill="#16241f">end_ok ให้ Osaka เป็น gateway พัก 1 คืนได้</text>
+
+      <path d="M782,306 L782,330" stroke="#157f4b" stroke-width="1.8" marker-end="url(#arr3)"/>
+      <rect x="670" y="332" width="225" height="32" rx="8" fill="#157f4b"/>
+      <text x="782" y="352" text-anchor="middle" font-weight="700" font-size="12" fill="#fff">✅ เก็บเข้า Plans แล้ว Backtrack หาต่อ</text>
+    </svg>
+  </div>
+
+  <div class="grid-2" style="margin-top: 16px;">
+    <div class="code-wrap">
+      <div class="code-head"><span>prolog/trip.pl (L979–997) — Generate-and-Test</span><span>Prolog</span></div>
+<pre><span class="fn">candidate</span>(Home, Country, Days, People, Interests, Pace, Pref, Plan) :-
+    city(Arrive, _, _, _, Country, _, _),
+    airport(Arrive, _),                 <span class="cm">% 1. สุ่มสนามบินขาเข้า</span>
+    <span class="fn">best_flights</span>(Home, Arrive, Pref, Outs),
+    member(Out, Outs),                  <span class="cm">% 2. หยิบไฟล์ทขาไป (BFS + memo)</span>
+    <span class="fn">round_tour</span>(Arrive, 4, Cities, Moves), <span class="cm">% 3. DFS ทัวร์ 1-4 เมือง</span>
+    <span class="fn">chosen_ok</span>(Country, Cities),         <span class="cm">% 4. ตรงเมืองที่เลือกไหม?</span>
+    last_elem(Cities, Last),
+    airport(Last, _),                   <span class="cm">% 5. เมืองสุดท้ายมีสนามบินไหม?</span>
+    home_airport(Home, Land),           <span class="cm">%    (BKK กลับ DMK ได้ via twin/2)</span>
+    <span class="fn">best_flights</span>(Last, Land, Pref, Rets),
+    member(Ret, Rets),                  <span class="cm">% 6. หยิบไฟล์ทขากลับ</span>
+    <span class="fn">build_plan</span>(..., Plan0),             <span class="cm">% 7. แบ่งวัน จัดที่เที่ยว คิดเงิน</span>
+    attach_moves(Ds, Ms, Ds1),
+    Plan = plan(C, O, Cs, Ms, R, Ds1, Costs, Meta).</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-head"><span>prolog/trip.pl (L692–708) — แบ่งวัน &amp; หักคืนนอนบนรถ</span><span>Prolog</span></div>
+<pre><span class="fn">share_days</span>(Cities, Pace, CityDays, Shares) :-
+    starts(Cities, Pace, [], S0),   <span class="cm">% แจกวันขั้นต่ำ (stay_range ±1)</span>
+    days_used(S0, Used),
+    Spare <span class="kw">is</span> CityDays - Used,
+    Spare >= 0,                     <span class="cm">% ถ้าวันไม่พอ -> FAIL! Backtrack</span>
+    <span class="fn">add_days</span>(Spare, S0, S1),        <span class="cm">% แจกวันที่เหลือให้ roomiest ก่อน</span>
+    as_pairs(S1, Shares).
+
+<span class="cm">% ใน build_plan (L752-756):</span>
+Rooms <span class="kw">is</span> (People + 1) // 2,         <span class="cm">% 2 คนต่อ 1 ห้อง</span>
+hotel_cost(CityDayList, 0, H0),
+<span class="fn">on_board</span>(Moves, Saved, OnBoard),    <span class="cm">% ถ้าขึ้น night_bus/train/ferry</span>
+H <span class="kw">is</span> H0 - Saved, Ho <span class="kw">is</span> H * Rooms,   <span class="cm">% หักค่ารร. คืนที่นอนบนรถออก!</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 4: BEST-FIRST SEARCH (INTERACTIVE STEPPER + CODE) -->
+<section class="card" id="bfs">
+  <span class="sec-tag">รูปที่ 4 · ตัวเอกของ Person 2 — กด Step ดูการทำงานของ Queue</span>
+  <h2>Best-First Search หาเส้นทางบิน (<code class="il">best_routes/5</code> + <code class="il">bf/5</code>)</h2>
+  <p class="lead">
+    ตัวอย่างจริงจากโค้ด: <strong>กรุงเทพ (<code class="il">BKK</code>) → โตเกียว (<code class="il">TYO</code>) เดือนเมษายน (Cheapest)</strong> — กดปุ่ม Step ด้านล่างเพื่อดูคิวเปลี่ยนทีละขั้น (เอาไว้ฝึกวาดบนกระดาน 4 ขั้นได้เลย!)
+  </p>
+
+  <div class="step-controls">
+    <button class="step-btn active" onclick="showStep(0)">Step 1: เริ่มต้นคิว</button>
+    <button class="step-btn" onclick="showStep(1)">Step 2: แตก BKK (และกันอ้อม)</button>
+    <button class="step-btn" onclick="showStep(2)">Step 3: เลือก SHA (ถูกสุด!)</button>
+    <button class="step-btn" onclick="showStep(3)">Step 4: ถึง TYO ครบ 2 ทาง</button>
+  </div>
+
+  <div class="trace-panel" id="tracePanel"></div>
+
+  <div class="grid-2">
+    <div class="svg-box">
+      <svg viewBox="0 0 560 275" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr-g2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="#157f4b"/>
+          </marker>
+          <marker id="arr-x" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="#c0392b"/>
+          </marker>
+          <marker id="arr-p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="#7b3fa0"/>
+          </marker>
+        </defs>
+
+        <!-- BKK -> SHA -> TYO -->
+        <path id="e-bkk-sha" d="M105,110 Q190,45 275,78" stroke="#157f4b" stroke-width="3" fill="none" marker-end="url(#arr-g2)"/>
+        <text x="188" y="55" text-anchor="middle" font-size="11.5" font-weight="700" fill="#157f4b">MU548 · ฿ 8,640</text>
+
+        <path id="e-sha-tyo" d="M335,78 Q415,45 480,105" stroke="#157f4b" stroke-width="3" fill="none" marker-end="url(#arr-g2)"/>
+        <text x="415" y="55" text-anchor="middle" font-size="11.5" font-weight="700" fill="#157f4b">MU523 · ฿ 8,850</text>
+        <text x="415" y="71" text-anchor="middle" font-size="10.5" fill="#4a5b54">รอต่อเครื่อง 130m (UTC ✅)</text>
+
+        <!-- BKK -> TYO direct -->
+        <path id="e-bkk-tyo" d="M112,126 L468,126" stroke="#7b3fa0" stroke-width="2.5" fill="none" marker-end="url(#arr-p)"/>
+        <text x="290" y="146" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7b3fa0">TG682 บินตรง · ฿ 20,250</text>
+
+        <!-- Blocked BKK -> CNX -> DMK -->
+        <path d="M92,154 L185,222" stroke="#c0392b" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#arr-x)"/>
+        <text x="108" y="204" text-anchor="middle" font-size="11" font-weight="700" fill="#c0392b">TG100 · ฿ 1,800</text>
+        <text x="285" y="232" text-anchor="middle" font-size="11" font-weight="700" fill="#c0392b">✘ โดน bad_thai_hop/3 ตัดทิ้ง! (ห้าม BKK อ้อมไป CNX/DMK)</text>
+
+        <!-- Nodes -->
+        <circle cx="80" cy="126" r="30" fill="#16241f"/>
+        <text x="80" y="123" text-anchor="middle" font-weight="800" font-size="13" fill="#fff">BKK</text>
+        <text x="80" y="139" text-anchor="middle" font-size="10" fill="#a9bdb4">UTC+7</text>
+
+        <circle cx="305" cy="82" r="28" fill="#fef5e7" stroke="#d97706" stroke-width="2.2"/>
+        <text x="305" y="79" text-anchor="middle" font-weight="800" font-size="13" fill="#b45309">SHA</text>
+        <text x="305" y="95" text-anchor="middle" font-size="10" fill="#4a5b54">UTC+8</text>
+
+        <circle cx="502" cy="126" r="30" fill="#eaf7f0" stroke="#157f4b" stroke-width="2.5"/>
+        <text x="502" y="123" text-anchor="middle" font-weight="800" font-size="13" fill="#157f4b">TYO</text>
+        <text x="502" y="139" text-anchor="middle" font-size="10" fill="#157f4b">UTC+9</text>
+
+        <circle cx="206" cy="236" r="24" fill="#fdeeed" stroke="#c0392b" stroke-width="1.8"/>
+        <text x="206" y="240" text-anchor="middle" font-weight="800" font-size="12" fill="#c0392b">CNX</text>
+      </svg>
+    </div>
+
+    <div>
+      <h3 style="margin-top:0;">ผลทดสอบจริงจาก <code class="il">compare_search/5</code> (เดือนเมษายน)</h3>
+      <p style="margin:0 0 8px; font-size:0.9rem; color:var(--ink2);">
+        DFS (<code class="il">fly/3</code>) ต้องหา<strong>ทุกเส้นทาง</strong>แล้วค่อยเรียง ส่วน BFS (<code class="il">best_routes/5</code>) หยุดทันทีที่ได้ 2 เส้นทางแรก:
+      </p>
+      <table>
+        <thead>
+          <tr><th>เส้นทาง</th><th>DFS</th><th>BFS (ถูกสุด)</th><th>ประหยัด</th><th>BFS (เร็วสุด)</th><th>ประหยัด</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Bangkok → Tokyo</td><td>54</td><td>10</td><td class="win-pct">81.5%</td><td>10</td><td class="win-pct">81.5%</td></tr>
+          <tr><td>Bangkok → Seoul</td><td>52</td><td>9</td><td class="win-pct">82.7%</td><td>9</td><td class="win-pct">82.7%</td></tr>
+          <tr><td>Chiang Mai → Tokyo</td><td>65</td><td>30</td><td class="win-pct">53.8%</td><td>26</td><td class="win-pct">60.0%</td></tr>
+          <tr><td>Phuket → Tokyo</td><td>62</td><td>28</td><td class="win-pct">54.8%</td><td>24</td><td class="win-pct">61.3%</td></tr>
+          <tr><td>Chiang Mai → Osaka</td><td>65</td><td>30</td><td class="win-pct">53.8%</td><td>31</td><td class="win-pct">52.3%</td></tr>
+          <tr><td>Phuket → Beijing</td><td>62</td><td>25</td><td class="win-pct">59.7%</td><td>35</td><td class="win-pct">43.5%</td></tr>
+          <tr><td>Don Mueang → Tokyo</td><td>36</td><td>5</td><td class="win-pct">86.1%</td><td>5</td><td class="win-pct">86.1%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:18px;">
+    <div class="code-wrap">
+      <div class="code-head"><span>prolog/trip.pl (L552–586) — Best-First Search Engine</span><span>Prolog</span></div>
+<pre><span class="fn">best_routes</span>(From, To, Pref, K, Routes) :-
+    bf([r(0, From, start, [From], [])], To, Pref, K, Routes).
+
+<span class="fn">bf</span>(_, _, _, 0, []) :- !.
+<span class="fn">bf</span>([], _, _, _, []) :- !.
+<span class="fn">bf</span>(Queue, To, Pref, K, Routes) :-
+    <span class="fn">shortest</span>(Queue, Best, Rest),  <span class="cm">% หยิบ Cost ต่ำสุดออกมาก่อน</span>
+    <span class="fn">visit</span>(Best, Rest, To, Pref, K, Routes).
+
+<span class="cm">% 1. ถึงปลายทาง To แล้ว: กลับด้าน Legs + ลด K + หาทางที่ 2 ต่อ</span>
+<span class="fn">visit</span>(r(_, To, _, _, Legs), Rest, To, Pref, K, [Route | More]) :-
+    \+ Legs = [], !,
+    rev(Legs, Route),
+    K1 <span class="kw">is</span> K - 1,
+    bf(Rest, To, Pref, K1, More).
+<span class="cm">% 2. ยังไม่ถึงและขาบิน &lt; Max: findall ขยายเพื่อนบ้านที่ผ่านกฎทุกข้อ</span>
+<span class="fn">visit</span>(r(_, Here, Clock, Seen, Legs), Rest, To, Pref, K, Routes) :-
+    opt(max_flights, Max),
+    listlen(Legs, N), N &lt; Max, !,
+    <span class="kw">findall</span>(r(C, Next, landed(Arr), [Next | Seen], [leg(...) | Legs]),
+            ( flight(Code, Here, Next, Timetable, Minutes, Sample),
+              \+ member(Next, Seen),            <span class="cm">% กันบินวนซ้ำ</span>
+              \+ back_to_thailand(Here, Next, To),
+              \+ bad_thai_hop(Here, Next, To),  <span class="cm">% กัน BKK/DMK อ้อมในไทย</span>
+              airline_ok(Code, Here, Next),
+              departs(Code, Timetable, HHMM),
+              daytime_ok(HHMM),
+              <span class="fn">departure</span>(Clock, Here, HHMM, Dep, Wait), <span class="cm">% เช็ค 90m-12h UTC</span>
+              Arr <span class="kw">is</span> Dep + Minutes,
+              flight_price(Code, Here, Next, Sample, Price),
+              note_explored(Here, Next),        <span class="cm">% เก็บเส้นสีส้ม + นับ steps</span>
+              <span class="fn">path_cost</span>(Pref, [...], C) ),
+            Longer),
+    append(Longer, Rest, Queue),
+    bf(Queue, To, Pref, K, Routes).
+<span class="cm">% 3. เกินจำนวนขาสูงสุดแล้ว: ทิ้งกิ่งนี้แล้วทำคิวที่เหลือต่อ</span>
+<span class="fn">visit</span>(_, Rest, To, Pref, K, Routes) :-
+    bf(Rest, To, Pref, K, Routes).</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-head"><span>prolog/trip.pl (L327–350, L526–550) — UTC &amp; Guard Rules</span><span>Prolog</span></div>
+<pre><span class="cm">% แปลงเวลาท้องถิ่นเป็น UTC แล้วเช็ครอต่อเครื่อง 90 นาที - 12 ชม.</span>
+<span class="fn">to_utc</span>(City, HHMM, T) :-
+    airport(City, Zone),
+    clock_minutes(HHMM, M),
+    T <span class="kw">is</span> M - Zone * 60.
+
+<span class="fn">departure</span>(landed(Arr), City, HHMM, Dep, Wait) :-
+    to_utc(City, HHMM, T),
+    W <span class="kw">is</span> (T - Arr) mod 1440,
+    enough_time(W, Wait),  <span class="cm">% ถ้าน้อยกว่า 90 นาที ให้บวก 1440 (วันถัดไป)</span>
+    Wait =&lt; 720,           <span class="cm">% รอเกิน 12 ชม. ไม่นับเป็นต่อเครื่อง</span>
+    Dep <span class="kw">is</span> Arr + Wait.
+
+<span class="cm">% ห้าม BKK/DMK บินในไทยก่อนออกนอกประเทศ</span>
+<span class="fn">bad_thai_hop</span>(Here, Next, To) :-
+    city(To, _, _, _, C0, _, _), \+ C0 = thailand,
+    bangkok_airport(Here),
+    city(Next, _, _, _, thailand, _, _).
+
+<span class="cm">% ดึง node ที่ Cost น้อยสุดในคิว</span>
+<span class="fn">shortest</span>([R | Rs], S, [R | Rest]) :- shortest(Rs, S, Rest), cheaper(S, R), !.
+<span class="fn">shortest</span>([R | Rs], R, Rs).</pre>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: Q&A CHEAT SHEET -->
+<section class="card" id="qa">
+  <span class="sec-tag">Section 5 · ป้องกันคำถามยาก / คำบ่นอาจารย์</span>
+  <h2>สิ่งที่ต้องรู้ไว้ตอบช่วยเพื่อน (ทั้ง 3 คน)</h2>
+  <div class="qa-grid">
+    <div class="qa-card">
+      <h4>1. "Python ทำเยอะกว่า Prolog รึเปล่า?"</h4>
+      <p><strong>ตอบ:</strong> ไม่ครับ Python ทำแค่ UI + วาดแผนที่ + ดึง API แต่ <strong>0% ของการตัดสินใจอยู่ใน Python</strong> ลองรัน <code class="il">swipl prolog/trip.pl</code> เพียวๆ ใน Terminal ก็ตอบ query <code class="il">plan_trip/11</code> ได้ครบเหมือนกันครับ</p>
+    </div>
+    <div class="qa-card">
+      <h4>2. "ทำไมไม่ใช้ built-in ของ SWI-Prolog อย่าง length, keysort, ->?"</h4>
+      <p><strong>ตอบ:</strong> เราตั้งใจเขียนตามหนังสือ <em>Programming in Prolog</em> (Clocksin &amp; Mellish) ล้วนๆ จึงเขียน <code class="il">listlen/2</code>, <code class="il">insort/2</code>, <code class="il">rev/2</code> และใช้ cut (<code class="il">!</code>) กับ <code class="il">\+</code> เองทั้งหมด</p>
+    </div>
+    <div class="qa-card">
+      <h4>3. "ทำไมใช้ assertz/retract ระหว่างรัน?"</h4>
+      <p><strong>ตอบ:</strong> ใช้แค่ 4 อย่างและล้างใหม่ทุก query: 1) <code class="il">flight_memo/4</code> กันหาไฟล์ทซ้ำ, 2) <code class="il">option/2</code> เก็บฟิลเตอร์ด้วย <code class="il">=..</code>, 3) <code class="il">explored/2</code> วาด animation บนแผนที่, 4) <code class="il">live_fare/3</code> รับราคาจริงจาก API</p>
+    </div>
+    <div class="qa-card">
+      <h4>4. "ทำไม Best-First ไม่ต้องใช้ Heuristic แบบ A*?"</h4>
+      <p><strong>ตอบ:</strong> กราฟเรามี 13 สนามบินและบินไม่เกิน 3 ขา ค่า <code class="il">path_cost/3</code> มีแต่เพิ่มขึ้น (monotonic) ดังนั้น Best-First Search (<code class="il">go3</code> บท 7.9) การันตีคำตอบแรกที่ถึงปลายทางว่าดีที่สุดโดยไม่ต้องประมาณ Heuristic</p>
+    </div>
+    <div class="qa-card">
+      <h4>5. "ถ้า user เลือก Kyoto ที่ไม่มีสนามบิน ทำไง?"</h4>
+      <p><strong>ตอบ:</strong> <code class="il">chosen_ok/2</code> → <code class="il">end_ok/3</code> อนุญาตให้เมืองที่มีสนามบินติดกัน (<strong>Osaka</strong>) เป็น <code class="il">gateway/1</code> พัก 1 คืนโดยอัตโนมัติ แล้วนั่งรถไฟ 30 นาทีเข้า Kyoto</p>
+    </div>
+    <div class="qa-card">
+      <h4>6. "ใช้ API จริงหรือ Mock-up?"</h4>
+      <p><strong>ตอบ:</strong> ใช้ทั้งคู่ครับ: ถ้ามี Travelpayouts API key + เน็ต จะดึงราคาจริงเข้า <code class="il">live_fare/3</code> (พร้อมปุ่ม <code class="il">View &lt;flight&gt;</code>) ถ้าไม่มีจะใช้ base mock-up ใน <code class="il">trip.pl</code> แล้ว Prolog บวก % วันหยุดไทยและฤดูท่องเที่ยวเพิ่มให้เอง</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+const STEPS = [
+  {
+    title: "Step 1: เริ่มต้นที่สนามบินต้นทาง (BKK)",
+    desc: "best_routes(bangkok, tokyo, cheapest, 2, Routes) ใส่ node แรกเข้า Queue ด้วย Cost = 0 และเวลา start",
+    pills: [
+      { txt: "POP → r(0, BKK, start, [BKK], [])", cls: "pop" }
+    ]
+  },
+  {
+    title: "Step 2: แตกเพื่อนบ้านจาก BKK (เช็คกฎทุกข้อ + กันอ้อมในไทย)",
+    desc: "findall หาไฟล์ทจาก BKK: เก็บ SHA (฿8,640) และ TYO บินตรง (฿20,250) ส่วน TG100 (BKK→CNX) โดน bad_thai_hop/3 ตัดทิ้งตั้งแต่ต้น!",
+    pills: [
+      { txt: "r(8640, SHA, ..., [MU548])", cls: "pop" },
+      { txt: "r(20250, TYO, ..., [TG682])", cls: "" }
+    ]
+  },
+  {
+    title: "Step 3: shortest/3 หยิบ SHA (8,640) ออกมาขยายต่อ (เพราะถูกสุด!)",
+    desc: "ต่อ MU523 จาก SHA→TYO (รอ 130 นาที อยู่ในช่วง 90m–12h UTC) ได้ราคารวม 8,640 + 8,850 = ฿17,490 ใส่กลับเข้า Queue",
+    pills: [
+      { txt: "r(17490, TYO, ..., [MU548, MU523])", cls: "pop" },
+      { txt: "r(20250, TYO, ..., [TG682])", cls: "" }
+    ]
+  },
+  {
+    title: "Step 4: Pop 17,490 TYO ถึงปลายทาง (คำตอบที่ 1) → Pop 20,250 TYO (คำตอบที่ 2) → จบ!",
+    desc: "visit/6 ตัวแรกจับคู่ Here = To ได้ทั้ง 2 เส้นทางที่ดีที่สุดแล้วลด K: 2 → 1 → 0 แล้ว cut (!) หยุดทันทีโดยใช้แค่ 10 steps (เทียบกับ DFS 54 steps)",
+    pills: [
+      { txt: "✅ #1: BKK→SHA→TYO = ฿17,490", cls: "win" },
+      { txt: "✅ #2: BKK→TYO (TG682) = ฿20,250", cls: "win" }
+    ]
+  }
+];
+
+function showStep(idx) {
+  document.querySelectorAll(".step-btn").forEach((b, i) => b.classList.toggle("active", i === idx));
+  const s = STEPS[idx];
+  const pills = s.pills.map(p => `<span class="pill ${p.cls}">${p.txt}</span>`).join("");
+  document.getElementById("tracePanel").innerHTML = `
+    <strong>${s.title}</strong>
+    <div style="font-size:0.9rem;color:var(--ink2);margin-top:4px;">${s.desc}</div>
+    <div class="queue-pills">${pills}</div>
+  `;
+}
+showStep(0);
+</script>
+</body>
+</html>

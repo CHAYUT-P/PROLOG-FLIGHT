@@ -151,9 +151,13 @@ def link(text: str, url: str) -> QLabel:
 
 
 class ResultsPanel(QWidget):
-    def __init__(self, cities: dict, countries: dict):
+    def __init__(self, cities: dict, countries: dict,
+                 on_replan_day: Callable[[dict, int, str | None], None] | None = None,
+                 city_cats_fn: Callable[[str], list[str]] | None = None):
         super().__init__()
         self.cities, self.countries = cities, countries
+        self.on_replan_day = on_replan_day
+        self.city_cats_fn = city_cats_fn
         self.lay = vbox(22, (24, 22, 24, 24))
         self.setLayout(self.lay)
 
@@ -201,8 +205,10 @@ class ResultsPanel(QWidget):
                 left.addLayout(self._notes(opt["notes"]))
             left.addLayout(self._booking(opt, start, searched, offers))
             left.addLayout(self._costs(opt, searched["budget"], searched["people"]))
+            if result.get("benchmark"):
+                left.addLayout(self._benchmark(result["benchmark"]))
             left.addStretch()
-            right.addLayout(self._days(opt, start))
+            right.addLayout(self._days(opt, start, searched["people"], searched["budget"]))
             right.addStretch()
             cols.addLayout(left, 1)
             cols.addLayout(right, 1)
@@ -427,7 +433,30 @@ class ResultsPanel(QWidget):
             box.addLayout(row)
         return box
 
-    def _days(self, opt: dict, start: dt.date) -> QVBoxLayout:
+    def _benchmark(self, bench: dict) -> QVBoxLayout:
+        cs = self.cities
+        box = vbox(6)
+        box.addWidget(label("Search benchmark (Prolog)", "sectionTitle"))
+        card = QFrame()
+        card.setObjectName("benchCard")
+        lay = vbox(8, (14, 10, 14, 10))
+        route = f'{cs[bench["from"]]["code"]} → {cs[bench["to"]]["code"]}'
+        lay.addWidget(label(span(f'Route {route} · mode: {bench["pref"]}', "ink2", 12, family=MONO), rich=True))
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(12)
+        cols = (("DFS", f'{bench["dfs"]:,} steps'),
+                ("UNIFORM-COST", f'{bench["ucs"]:,} steps'),
+                ("A* (f=g+h)", f'{bench["astar"]:,} steps'))
+        for i, (k, v) in enumerate(cols):
+            grid.addWidget(label(k, "factKey"), 0, i)
+            grid.addWidget(label(v, "factValue"), 1, i)
+        lay.addLayout(grid)
+        card.setLayout(lay)
+        box.addWidget(card)
+        return box
+
+    def _days(self, opt: dict, start: dt.date, people: int, budget: int) -> QVBoxLayout:
         cs = self.cities
         box = vbox(0)
         box.addWidget(label("Day by day", "sectionTitle"))
@@ -444,7 +473,34 @@ class ResultsPanel(QWidget):
                     + span(escape(where), "ink", 15.5, 700))
             if city and kind not in ("home", "fly"):
                 head += "&nbsp;&nbsp;" + span(city["thai"], "ink2", 12, family=THAI)
-            inner.addWidget(label(head, rich=True))
+            head_row = hbox(8)
+            head_row.addWidget(label(head, rich=True), 1)
+            if (self.on_replan_day and d["city"] and kind not in ("home", "fly", "air")
+                    and float(d.get("hours", 0)) >= 2.0):
+                day_prefs = opt.get("dayPrefs", {})
+                pinned = day_prefs.get(d["day"])
+                btn = QPushButton(f"{pinned.title()} ▾" if pinned else "Auto ▾")
+                btn.setObjectName("dayCatPick")
+                btn.setProperty("pinned", "true" if pinned else "false")
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.setToolTip("Choose activity category for this day and re-plan")
+                menu = QMenu(btn)
+                auto_act = menu.addAction("Auto (Base interests)" if not pinned else "Reset to Auto")
+                auto_act.triggered.connect(
+                    lambda _=False, o=opt, dn=d["day"]: self.on_replan_day(o, dn, None)
+                )
+                cats = self.city_cats_fn(d["city"]) if self.city_cats_fn else []
+                if cats:
+                    menu.addSeparator()
+                    for cat in cats:
+                        prefix = "✓ " if cat == pinned else ""
+                        act_item = menu.addAction(f"{prefix}{cat.title()}")
+                        act_item.triggered.connect(
+                            lambda _=False, o=opt, dn=d["day"], c=cat: self.on_replan_day(o, dn, c)
+                        )
+                btn.clicked.connect(lambda _=False, b=btn, m=menu: m.exec(b.mapToGlobal(b.rect().bottomLeft())))
+                head_row.addWidget(btn, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            inner.addLayout(head_row)
             t = d["travel"]
             if t:
                 ride = hbox(8)
@@ -460,7 +516,7 @@ class ResultsPanel(QWidget):
                 ride.addWidget(label(text, "mono", wrap=True), 1)
                 inner.addLayout(ride)
             if d["activities"]:
-                inner.addWidget(self._day_activities(d["activities"], d.get("alternatives", [])))
+                inner.addWidget(self._day_activities(opt, d, people, budget))
             else:
                 text = {"free": "Free day: nothing left on the list here, so wander or rest.",
                         "air": "Overnight in the air.", "fly": "Travel day.", "home": "Travel day."}.get(kind, "Arrive and settle in.")
@@ -472,8 +528,9 @@ class ResultsPanel(QWidget):
             box.addWidget(rail)
         return box
 
-    @staticmethod
-    def _day_activities(acts: list[dict], alts: list[dict] | None = None) -> QWidget:
+    def _day_activities(self, opt: dict, day: dict, people: int, budget: int) -> QWidget:
+        acts = day["activities"]
+        alts = day.get("alternatives", [])
         names = ", ".join(a["name"] for a in acts)
         total = sum(a["fee"] for a in acts)
         fees = baht(total) if total else "Free"
@@ -481,7 +538,7 @@ class ResultsPanel(QWidget):
         box = QWidget()
         lay = vbox(4)
         row = Clickable("daySummary")
-        row.setToolTip("Show activity details & alternatives")
+        row.setToolTip("Show activity details")
         line = hbox(10)
         text = label(span(escape(names), "ink2", 13.5), wrap=True, rich=True)
         line.addWidget(text, 1)
@@ -495,7 +552,7 @@ class ResultsPanel(QWidget):
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(5)
+        grid.setVerticalSpacing(6)
         slot_label = {"morning": "Morning", "afternoon": "Afternoon", "evening": "Evening",
                       "all_day": "All day", "any": "Flexible"}
         for r, a in enumerate(acts):
@@ -510,7 +567,7 @@ class ResultsPanel(QWidget):
             fee = label(span(baht(a["fee"]) if a["fee"] else "Free", "ink2", 12.5, family=MONO), rich=True)
             fee.setMinimumWidth(56)
             fee.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-            grid.addWidget(fee, r, 1)
+            grid.addWidget(fee, r, 1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
         if alts:
             alt_lines = [f'{escape(x["name"])} ({escape(x["category"])}, {x["hours"]:g}h)' for x in alts]
             alt_html = span("Alternatives: ", "ink3", 11.5, 700, MONO) + span(" · ".join(alt_lines), "ink3", 12)
