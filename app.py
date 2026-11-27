@@ -116,6 +116,7 @@ class TangWindow(QMainWindow):
     #layout
 
     def _scroll(self, inner: QWidget, name: str, width: int) -> QScrollArea:
+        inner.setMaximumWidth(width - 14)
         area = QScrollArea()
         area.setObjectName(name)
         area.setWidget(inner)
@@ -237,15 +238,24 @@ class TangWindow(QMainWindow):
             (c["id"], f'{c["code"]} · {c["name"]}', f'{c["thai"]} · {self.countries[c["country"]]["name"]}')
             for c in self.data["cities"] if c["zone"] is not None
         ]
-        self.home_station = StationCard(home_options)
+        self.home_station = StationCard(home_options, title="Fly from")
         self.home_station.picked.connect(lambda v: self.update_form(**{"from": v}))
-        lay.addWidget(field("Fly from", self.home_station))
+        lay.addWidget(self.home_station)
 
         options = [("anywhere", "Anywhere (Prolog picks)", "ให้ Prolog เลือก · let Prolog choose")] + [
             (c["id"], c["name"], c["thai"]) for c in self.data["countries"]]
         self.station = StationCard(options)
         self.station.picked.connect(lambda v: self.update_form(to=v))
         lay.addWidget(self.station)
+
+        self.city_box = QWidget()
+        self.city_flow = QGridLayout()
+        self.city_flow.setContentsMargins(0, 0, 0, 0)
+        self.city_flow.setSpacing(6)
+        self.city_box.setLayout(self.city_flow)
+        self.city_hint = label("", "hint", wrap=True)
+        lay.addWidget(field("Cities", self.city_box, self.city_hint))
+        self._fill_cities()
 
         today = dt.date.today()
         leave = DatePicker(self.form["date"], today + dt.timedelta(days=1), today + dt.timedelta(days=360))
@@ -298,17 +308,7 @@ class TangWindow(QMainWindow):
         around = Segmented(AROUND, self.form["getting_around"])
         around.changed.connect(lambda v: self.update_form(getting_around=v))
         lay.addWidget(field("Getting around", around,
-                            label("Fast = bullet trains, trains and flights. Night rides save a hotel night.",
-                                  "hint", wrap=True)))
-
-        self.city_box = QWidget()
-        self.city_flow = QGridLayout()
-        self.city_flow.setContentsMargins(0, 0, 0, 0)
-        self.city_flow.setSpacing(6)
-        self.city_box.setLayout(self.city_flow)
-        self.city_hint = label("", "hint", wrap=True)
-        lay.addWidget(field("Cities", self.city_box, self.city_hint))
-        self._fill_cities()
+                            label("Fast = bullet trains, trains and flights.", "hint", wrap=True)))
 
         self.go = QPushButton("Find trips                                      →")
         self.go.setObjectName("go")
@@ -354,9 +354,9 @@ class TangWindow(QMainWindow):
         if country not in self.countries:
             self.city_hint.setText("Pick a country to choose its cities.")
             return
-        self.city_hint.setText("Pick the cities you want: the trip goes only there. "
-                               "Pick none and Prolog chooses for you.")
-        mine = [c for c in self.data["cities"] if c["country"] == country]
+        self.city_hint.setText("Leave empty for 1 main city (plus nearby day trips). "
+                               "Pick multiple cities to visit them all.")
+        mine = [c for c in self.data["cities"] if c["country"] == country and c["id"] != "don_mueang"]
         for i, c in enumerate(mine):
             chip = Chip(c["name"], c["id"] in self.form["cities"])
             chip.toggled.connect(lambda on, k=c["id"]: self.update_form(

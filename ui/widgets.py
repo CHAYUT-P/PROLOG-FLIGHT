@@ -161,19 +161,20 @@ class Stepper(QFrame):
 
 class StationCard(QFrame):
     picked = Signal(str)
-    def __init__(self, options: list[tuple[str, str, str]]):
+    def __init__(self, options: list[tuple[str, str, str]], title: str = "Fly to"):
         super().__init__()
         self.setObjectName("station")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Maximum)
         self.options = options
         lay = vbox(2, (14, 12, 14, 12))
         top = hbox()
-        top.addWidget(eyebrow("Fly to"))
+        top.addWidget(eyebrow(title))
         top.addStretch()
         top.addWidget(label("▾", "caret"))
         lay.addLayout(top)
-        self.name = label("", "stationName")
-        self.thai = label("", "stationThai")
+        self.name = label("", "stationName", wrap=True)
+        self.thai = label("", "stationThai", wrap=True)
         lay.addWidget(self.name)
         lay.addWidget(self.thai)
         self.setLayout(lay)

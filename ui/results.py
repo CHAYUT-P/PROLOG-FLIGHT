@@ -7,7 +7,7 @@ from typing import Callable
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QPainter, QPen
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 import booking
@@ -367,7 +367,9 @@ class ResultsPanel(QWidget):
         box.addWidget(eyebrow(title))
         for leg in legs:
             if leg["wait"]:
+                box.addSpacing(6)
                 box.addWidget(label(f'Change in {cs[leg["from"]]["name"]} {dur(leg["wait"])} between flights', "layover"))
+                box.addSpacing(2)
             row = hbox(10)
             tier = "Budget" if leg.get("airlineTier") == "budget" else "Full-service"
             airline_label = leg.get("airlineName") or leg["code"]
@@ -391,15 +393,21 @@ class ResultsPanel(QWidget):
             box.addLayout(row)
             choices = leg.get("choices") or []
             if len(choices) > 1:
-                pick = QComboBox()
+                pick = QPushButton(f'Change airline ({len(choices)} choices)  ▾')
+                pick.setObjectName("airlinePick")
+                pick.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+                pick.setCursor(Qt.CursorShape.PointingHandCursor)
+                menu = QMenu(pick)
                 for c in choices:
-                    t = "Budget" if c["airlineTier"] == "budget" else "Full"
-                    pick.addItem(f'{c["airlineName"]} ({c["code"]} · {t}) · {c["depart"]}–{c["arrive"]} · {baht(c["price"])}', c)
-                idx = next((i for i, c in enumerate(choices) if c["code"] == leg["code"]), 0)
-                pick.setCurrentIndex(idx)
-                pick.currentIndexChanged.connect(
-                    lambda i, o=opt, l=leg, cb=pick, p=people, b=budget: self._pick_airline(o, l, cb.itemData(i), p, b)
-                )
+                    t = "Budget" if c["airlineTier"] == "budget" else "Full-service"
+                    mark = "✓  " if c["code"] == leg["code"] else "    "
+                    act = menu.addAction(
+                        f'{mark}{c["airlineName"]} ({c["code"]} · {t}) · {c["depart"]}–{c["arrive"]} · {baht(c["price"])}'
+                    )
+                    act.triggered.connect(
+                        lambda _=False, o=opt, l=leg, ch=c, p=people, b=budget: self._pick_airline(o, l, ch, p, b)
+                    )
+                pick.clicked.connect(lambda _=False, b=pick, m=menu: m.exec(b.mapToGlobal(b.rect().bottomLeft())))
                 box.addWidget(pick)
         return box
 

@@ -165,6 +165,9 @@ def stylesheet() -> str:
                  font-family: "{MONO}"; font-size: 12px; font-weight: 600; }}
     #factKey {{ font-family: "{MONO}"; font-size: 10.5px; color: {c['ink3']}; }}
     #factValue {{ font-family: "{MONO}"; font-size: 15px; font-weight: 600; }}
+    #airlinePick {{ background: {c['paper']}; border: 1px solid {c['rule']}; border-radius: 6px;
+                   padding: 5px 10px; text-align: left; font-family: "{MONO}"; font-size: 11.5px; color: {c['ink2']}; }}
+    #airlinePick:hover {{ border-color: {c['ink3']}; color: {c['ink']}; }}
     #layover {{ background: {c['paper']}; border-radius: 4px; padding: 4px 8px; font-size: 12px; color: {c['ink2']}; }}
     #sectionTitle {{ font-size: 13px; font-weight: 700; }}
     #mono {{ font-family: "{MONO}"; font-size: 12.5px; color: {c['ink2']}; }}

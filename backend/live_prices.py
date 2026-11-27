@@ -55,7 +55,7 @@ def _save_cache(cache: dict) -> None:
 def _fetch_one(key: str, origin: str, dest: str, month: str, tok: str) -> tuple[str, dict | None]:
     query = urllib.parse.urlencode({
         "origin": origin, "destination": dest, "departure_at": month, "one_way": "true",
-        "direct": "true", "currency": "thb", "sorting": "price", "limit": 10,
+        "direct": "true", "currency": "thb", "sorting": "price", "limit": 20,
     })
     req = urllib.request.Request(f"{API}?{query}", headers={"X-Access-Token": tok, "Accept-Encoding": "identity"})
     try:
@@ -77,7 +77,7 @@ def _fetch_one(key: str, origin: str, dest: str, month: str, tok: str) -> tuple[
                 "airline": al, "flight": str(item.get("flight_number", "")),
                 "link": item.get("link", ""),
             }
-        if len(by_airline) >= 5:
+        if len(by_airline) >= 6:
             break
     best = offers[0]
     when = best.get("departure_at", "")
